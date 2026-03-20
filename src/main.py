@@ -5,11 +5,11 @@ def load_config(config_path: str = None) -> dict:
     if config_path is None:
         config_path = 'config.yaml'
 
-    conf: dict
+    config: dict
     with open(config_path, 'r') as f:
-        conf = yaml.safe_load(f)
+        config = yaml.safe_load(f)
 
-    return conf
+    return config
 
 def init_world():
     config: dict = load_config()
