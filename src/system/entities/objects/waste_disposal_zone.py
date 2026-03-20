@@ -1,6 +1,6 @@
 from mesa import Model
 
-from src.system.objects.base_object import BaseObject
+from src.system.entities.objects.base_object import BaseObject
 
 
 class WasteDisposalZone(BaseObject):

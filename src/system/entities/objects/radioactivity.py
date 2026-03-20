@@ -2,7 +2,7 @@ import random
 
 from mesa import Model
 
-from src.system.objects.base_object import BaseObject
+from src.system.entities.objects.base_object import BaseObject
 
 _ZONE_RANGES = {
     "z1": (0.0, 0.33),
