@@ -1,0 +1,56 @@
+from pydantic.dataclasses import dataclass
+from pydantic import Field
+
+from src.system.models.types import WasteType, RobotType, SensorType, MAX_WASTE_PER_CELL
+
+
+@dataclass(frozen=True)
+class CellContent:
+    """ The percetion of a cell from a bot perspective"""
+    # Cell static state
+    radioactivity_value: float = Field(ge=0.0, le=1.0)
+
+    # Cell dynamic state
+    waste_type: WasteType = Field(default=WasteType.NONE)
+    waste_quantity: int = Field(default=0, ge=0, le=MAX_WASTE_PER_CELL)
+    robot_type: RobotType = Field(default=RobotType.NONE)
+
+    @property
+    def get_zone(self) -> int:
+        """
+        Return the zone number, based on the radioactivity value.
+        We can read that as a risk score.
+        1: green, 2: yellow, 3: red
+        """
+        if self.radioactivity_value <= 0.33:
+            return 1
+        elif self.radioactivity_value <= 0.66:
+            return 2
+        else:
+            return 3
+
+@dataclass(frozen=True)
+class Sensor:
+    type: SensorType = Field(default=SensorType.OPTIC)
+    range: int = Field(default=1, ge=0)
+
+
+@dataclass(frozen=True)
+class Perception:
+    perceiver_position: tuple[int, int]
+    """
+    The position of the agent perceiving.
+    """
+
+    readings: tuple[CellContent, ...]
+    """ 
+    The collection of what the bot sees (all cells).
+    Note that the coordinates are centered on the agent that perceives!!!
+    """
+
+    step: int = Field(ge=0)
+    """
+    The step when this perception is created.
+    """
+
+    perceiver_id: int = Field(ge=0)
