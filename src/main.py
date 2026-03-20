@@ -21,10 +21,10 @@ def init_world():
     robot_agents = [a for a in model.agents if hasattr(a, 'deliberate')]
     print(f"Number of robot agents: {len(robot_agents)}")
 
-    return model, robot_agents
+    return model, robot_agents, config.get('simulation').get('steps')
 
 if __name__ == '__main__':
-    model, robot_agents = init_world()
+    model, robot_agents, nb_steps = init_world()
 
     for agent in robot_agents:
         print(f"  {agent.__class__.__name__} at position {agent.pos}")
@@ -39,3 +39,7 @@ if __name__ == '__main__':
         print(f"  Last action: {agent.knowledge.last_action}")
         print(f"  Perception readings count: {len(agent.knowledge.last_perception.readings)}")
         print(f"  Belief map entries: {len(agent.knowledge.belief_map)}")
+
+    for i in range(nb_steps):
+        model.step()
+        print(f"Step {i} done.")
