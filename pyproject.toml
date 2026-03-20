@@ -1,0 +1,12 @@
+[project]
+name = "multi-agents-system"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "mesa",
+    "pydantic",
+    "matplotlib",
+    "seaborn",
+    "pyyaml>=6.0.3",
+]
