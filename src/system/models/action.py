@@ -6,6 +6,10 @@ class ActionType(Enum):
     MOVE_DOWN = 2
     MOVE_LEFT = 3
     MOVE_RIGHT = 4
-    PICK = 5
-    DROP = 6
-    WAIT = 0
+    MOVE_UP_LEFT = 5
+    MOVE_UP_RIGHT = 6
+    MOVE_DOWN_LEFT = 7
+    MOVE_DOWN_RIGHT = 8
+    WAIT = 9
+    PICK = 10
+    DROP = 11

@@ -7,6 +7,8 @@ from src.system.models.knowledge import Knowledge
 from src.system.models.perception import Perception
 from src.system.models.types import RobotType
 
+import random
+
 
 class Sensor:
     """
@@ -45,7 +47,32 @@ class BaseAgent(Agent, ABC):
 
     @abstractmethod
     def deliberate(self, knowledge: Knowledge) -> ActionType:
-        raise NotImplementedError()
+        """
+        Prend une décision basée sur la situation actuelle.
+        Inclu des décisions de déplacement, de prise ou de dépôt d'objets.
+        """
+        action = self.decide_movement()
+        if action:
+            return action
+
+        return ActionType.WAIT
+
+    def decide_movement(self) -> ActionType:
+        """
+        Décide du mouvement de l'agent.
+        """
+        directions = [
+            ActionType.MOVE_UP,
+            ActionType.MOVE_DOWN,
+            ActionType.MOVE_LEFT,
+            ActionType.MOVE_RIGHT,
+            ActionType.MOVE_UP_LEFT,
+            ActionType.MOVE_UP_RIGHT,
+            ActionType.MOVE_DOWN_LEFT,
+            ActionType.MOVE_DOWN_RIGHT
+        ]
+        return random.choice(directions)
+
 
     def update_beliefs(self, action: ActionType, perception: Perception) -> None:
         """
