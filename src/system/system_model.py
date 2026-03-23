@@ -2,32 +2,28 @@ from typing import Sequence
 
 from mesa import Model, DataCollector, Agent
 
+from src.system.config import Config
 from src.system.entities.agents.base_agent import BaseAgent
-from src.system.entities.agents.green_agent import GreenAgent
-from src.system.entities.agents.yellow_agent import YellowAgent
-from src.system.entities.agents.red_agent import RedAgent
 from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
 from src.system.models.action import ActionType
 from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
-from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
-
 
 
 class SystemModel(Model):
-    def __init__(self, config: dict):
+    def __init__(self, config: Config) -> None:
         super().__init__()
 
         self.config = config
-        width = self.config['grid']['width']
-        height = self.config['grid']['height']
+        width: int = config.grid.width
+        height: int = config.grid.height
 
         self.grid = NavigableGrid(width=width, height=height)
 
         from src.system.tools.spawner import Spawner
-        spawner = Spawner(self, self.config)
+        spawner = Spawner(self, config)
         spawner.execute_spawning()
 
         self.steps = 0

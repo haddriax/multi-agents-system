@@ -1,19 +1,24 @@
 import yaml
+
+from src.system.config import Config
 from src.system.system_model import SystemModel
 
-def load_config(config_path: str = None) -> dict:
+def load_config(config_path: str = None) -> Config:
     if config_path is None:
         config_path = 'config.yaml'
 
-    config: dict
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
+    config: Config
+    try:
+        config = Config.from_yaml(config_path)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    except yaml.YAMLError as exc:
+        raise exc
 
     return config
 
 def init_world():
-    config: dict = load_config()
-    print(f"Config loaded: {config}")
+    config: Config = load_config()
 
     model = SystemModel(config)
     print(f"\nModel created with grid size: {model.grid.width}x{model.grid.height}")
@@ -21,7 +26,7 @@ def init_world():
     robot_agents = [a for a in model.agents if hasattr(a, 'deliberate')]
     print(f"Number of robot agents: {len(robot_agents)}")
 
-    return model, robot_agents, config.get('simulation').get('steps')
+    return model, robot_agents, config.simulation.steps
 
 if __name__ == '__main__':
     model, robot_agents, nb_steps = init_world()
