@@ -3,3 +3,10 @@ simulation:
 grid:
   width: 80
   height: 20
+spawning:
+  n_green: 5
+  n_yellow: 5
+  n_red: 5
+  n_waste_green: 8
+  n_waste_yellow: 4
+  n_waste_red: 2

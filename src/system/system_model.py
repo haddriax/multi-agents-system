@@ -2,51 +2,37 @@ from typing import Sequence
 
 from mesa import Model, DataCollector, Agent
 
+from src.system.config import Config
 from src.system.entities.agents.base_agent import BaseAgent
-from src.system.entities.agents.green_agent import GreenAgent
-from src.system.entities.agents.yellow_agent import YellowAgent
-from src.system.entities.agents.red_agent import RedAgent
 from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
 from src.system.models.action import ActionType
 from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
-from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
-
 
 
 class SystemModel(Model):
-    def __init__(self, config: dict):
+    def __init__(self, config: Config) -> None:
         super().__init__()
 
-        width = config['grid']['width']
-        height = config['grid']['height']
+        self.config = config
+        width: int = config.grid.width
+        height: int = config.grid.height
 
         self.grid = NavigableGrid(width=width, height=height)
+
+        from src.system.tools.spawner import Spawner
+        spawner = Spawner(self, config)
+        spawner.execute_spawning()
+
         self.steps = 0
         self.datacollector = DataCollector(
             # @todo Implement the DataCollector
         )
 
-        self._place_radioactivity_agents()
-        self._place_waste_disposal_zone()
-        self._place_agents()
-
-    def _place_radioactivity_agents(self) -> None:
-        width = self.grid.width
-        height = self.grid.height
-
-        for x in range(width):
-            zone = self.grid.get_zone(x)
-            for y in range(height):
-                self.grid.place_agent(Radioactivity(self, zone), (x, y))
-
-    def _place_waste_disposal_zone(self) -> None:
-        width = self.grid.width
-        height = self.grid.height
-        disposal_y = self.random.randrange(height)
-        self.grid.place_agent(WasteDisposalZone(self), (width - 1, disposal_y))
+    def get_zone(self, x: int) -> str:
+        return self.grid.get_zone(x)
 
     def step(self):
         """ Execute one world step """
