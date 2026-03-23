@@ -48,9 +48,26 @@ class BaseAgent(Agent, ABC):
     @abstractmethod
     def deliberate(self, knowledge: Knowledge) -> ActionType:
         """
-        Prend une décision basée sur la situation actuelle.
-        Inclu des décisions de déplacement, de prise ou de dépôt d'objets.
+        Take a decision based on the current situation.
         """
+        # Verify if there is a waste of the agent's type in the immediate perception
+        target_pos = None
+        for pos, cell_content in knowledge.belief_map.items():
+            if cell_content.waste_type == self.robot_type:
+                target_pos = pos
+                break
+
+        # If no waste if found in the immediate perception, check the belief map for known waste locations
+        if not target_pos:
+            for pos, cell_content in knowledge.belief_map.items():
+                if cell_content.waste_type == self.robot_type:
+                    target_pos = pos
+                    break
+
+        # If a target position is found, move towards it; otherwise, decide a random movement to explore
+        if target_pos:
+            return self.move_towards(target_pos)
+
         action = self.decide_movement()
         if action:
             return action
@@ -73,6 +90,31 @@ class BaseAgent(Agent, ABC):
         ]
         return random.choice(directions)
 
+    def move_towards(self, target_pos: tuple[int, int]) -> ActionType:
+        """
+        Compute the action needed to move towards the target position based on the agent's current position.
+        """
+        agent_x, agent_y = self.knowledge.position
+        target_x, target_y = target_pos
+
+        if target_x > agent_x and target_y > agent_y:
+            return ActionType.MOVE_UP_RIGHT
+        elif target_x > agent_x and target_y < agent_y:
+            return ActionType.MOVE_DOWN_RIGHT
+        elif target_x < agent_x and target_y > agent_y:
+            return ActionType.MOVE_UP_LEFT
+        elif target_x < agent_x and target_y < agent_y:
+            return ActionType.MOVE_DOWN_LEFT
+        elif target_x > agent_x:
+            return ActionType.MOVE_RIGHT
+        elif target_x < agent_x:
+            return ActionType.MOVE_LEFT
+        elif target_y > agent_y:
+            return ActionType.MOVE_UP
+        elif target_y < agent_y:
+            return ActionType.MOVE_DOWN
+
+        return ActionType.WAIT
 
     def update_beliefs(self, action: ActionType, perception: Perception) -> None:
         """
