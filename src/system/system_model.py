@@ -20,33 +20,23 @@ class SystemModel(Model):
     def __init__(self, config: dict):
         super().__init__()
 
-        width = config['grid']['width']
-        height = config['grid']['height']
+        self.config = config
+        width = self.config['grid']['width']
+        height = self.config['grid']['height']
 
         self.grid = NavigableGrid(width=width, height=height)
+
+        from src.system.tools.spawner import Spawner
+        spawner = Spawner(self, self.config)
+        spawner.execute_spawning()
+
         self.steps = 0
         self.datacollector = DataCollector(
             # @todo Implement the DataCollector
         )
 
-        self._place_radioactivity_agents()
-        self._place_waste_disposal_zone()
-        self._place_agents()
-
-    def _place_radioactivity_agents(self) -> None:
-        width = self.grid.width
-        height = self.grid.height
-
-        for x in range(width):
-            zone = self.grid.get_zone(x)
-            for y in range(height):
-                self.grid.place_agent(Radioactivity(self, zone), (x, y))
-
-    def _place_waste_disposal_zone(self) -> None:
-        width = self.grid.width
-        height = self.grid.height
-        disposal_y = self.random.randrange(height)
-        self.grid.place_agent(WasteDisposalZone(self), (width - 1, disposal_y))
+    def get_zone(self, x: int) -> str:
+        return self.grid.get_zone(x)
 
     def step(self):
         """ Execute one world step """
@@ -153,28 +143,4 @@ class SystemModel(Model):
         elif action == ActionType.WAIT:
             # Just wait one turn
             pass
-
-    def _place_agents(self) -> None:
-        """
-        Initialize and place agents on the grid.
-        for debug we just place one for now
-        @todo add proper spawning
-        """
-        width = self.grid.width
-        height = self.grid.height
-
-        green_x = self.random.randrange(0, width // 3)
-        green_y = self.random.randrange(height)
-        green_agent = GreenAgent(self)
-        self.grid.place_agent(green_agent, (green_x, green_y))
-
-        yellow_x = self.random.randrange(width // 3, 2 * width // 3)
-        yellow_y = self.random.randrange(height)
-        yellow_agent = YellowAgent(self)
-        self.grid.place_agent(yellow_agent, (yellow_x, yellow_y))
-
-        red_x = self.random.randrange(2 * width // 3, width)
-        red_y = self.random.randrange(height)
-        red_agent = RedAgent(self)
-        self.grid.place_agent(red_agent, (red_x, red_y))
 
