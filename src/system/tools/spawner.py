@@ -9,21 +9,22 @@ from src.system.entities.objects.waste import Waste
 from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
 from src.system.models.types import WasteType
 from src.system.system_model import SystemModel
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class ZoneConfig:
+    zone:           str
+    waste_type:     WasteType
+    robot_class:    Type[GreenAgent | YellowAgent | RedAgent]
+    waste_count_key: str
+    robot_count_key: str
 
 
-def _zone_x_range(zone: str, width: int) -> range:
-    """Return the strict x-column range for a given zone name."""
-    third = width // 3
-    two_thirds = 2 * width // 3
-    ranges = {
-        "green":  range(0,          third),
-        "yellow": range(third,      two_thirds),
-        "red":    range(two_thirds, width),
-    }
-    if zone not in ranges:
-        raise ValueError(f"Unknown zone '{zone}'")
-    return ranges[zone]
-
+_ZONE_CONFIGS: tuple[ZoneConfig, ...] = (
+    ZoneConfig("z1", WasteType.GREEN,  GreenAgent,  "n_waste_green",  "n_green"),
+    ZoneConfig("z2", WasteType.YELLOW, YellowAgent, "n_waste_yellow", "n_yellow"),
+    ZoneConfig("z3", WasteType.RED,    RedAgent,    "n_waste_red",    "n_red"),
+)
 
 class Spawner:
     def __init__(self, model: SystemModel, config: dict) -> None:
@@ -34,9 +35,9 @@ class Spawner:
             raise EnvironmentError("No spawning config loaded")
 
         self.available_spawns: dict[str, list[tuple[int, int]]] = {
-            "green":  [],
-            "yellow": [],
-            "red":    [],
+            "z1": [],
+            "z2": [],
+            "z3": [],
         }
         """All free cells per zone, pre-computed before any robot/waste placement."""
 
@@ -48,19 +49,14 @@ class Spawner:
         self._place_wastes(self.model, self.spawning_config)
         self._place_robots(self.model, self.spawning_config)
 
-
     def _precompute_available_cells(self, model: SystemModel) -> None:
         """
         Populate available_spawns with every (x, y) cell strictly within
-        each zone. Radioactivity agents are grid-layer agents and do not
-        count as occupants for this purpose.
+        each zone, in random order. Radioactivity agents are grid-layer
+        agents and do not count as occupants for this purpose.
         """
-        height = model.grid.height
-        width  = model.grid.width
-
-        for zone in ("green", "yellow", "red"):
-            xs = _zone_x_range(zone, width)
-            cells = [(x, y) for x in xs for y in range(height)]
+        for zone in ("z1", "z2", "z3"):
+            cells = model.grid.get_all_cells_in_zone(zone)
             random.shuffle(cells)
             self.available_spawns[zone] = cells
 
@@ -76,60 +72,33 @@ class Spawner:
         return self.available_spawns[zone].pop()
 
     def _place_radioactivity(self, model: SystemModel) -> None:
-        width  = model.grid.width
-        height = model.grid.height
-
-        for x in range(width):
-            zone: str = model.grid.get_zone(x)
-            for y in range(height):
+        for x in range(model.grid.width):
+            zone = model.grid.get_zone(x)
+            for y in range(model.grid.height):
                 model.grid.place_agent(Radioactivity(model, zone), (x, y))
 
     def _place_waste_disposal_zone(self, model: SystemModel) -> None:
-        disposal_y = random.randrange(model.grid.height)
         disposal_x = model.grid.width - 1
+        disposal_y = random.randrange(model.grid.height)
         model.grid.place_agent(WasteDisposalZone(model), (disposal_x, disposal_y))
 
-        # The disposal cell is on the red zone's rightmost column;
-        # remove it so robots and waste are never spawned there.
+        # Remove the disposal cell from z3's available pool
         cell = (disposal_x, disposal_y)
         try:
-            self.available_spawns["red"].remove(cell)
+            self.available_spawns["z3"].remove(cell)
         except ValueError:
-            pass  # cell was already consumed or not in range
+            pass  # already consumed or out of range
 
     def _place_wastes(self, model: SystemModel, spawning_config: dict) -> None:
-        waste_map: dict[str, WasteType] = {
-            "green":  WasteType.GREEN,
-            "yellow": WasteType.YELLOW,
-            "red":    WasteType.RED,
-        }
-        count_keys: dict[str, str] = {
-            "green":  "n_waste_green",
-            "yellow": "n_waste_yellow",
-            "red":    "n_waste_red",
-        }
-
-        for zone, waste_type in waste_map.items():
-            n = spawning_config.get(count_keys[zone], 0)
+        for zc in _ZONE_CONFIGS:
+            n = spawning_config.get(zc.waste_count_key, 0)
             for _ in range(n):
-                pos = self._pop_cell(zone, f"Waste({waste_type.name})")
-                model.grid.place_agent(Waste(model, waste_type), pos)
+                pos = self._pop_cell(zc.zone, f"Waste({zc.waste_type.name})")
+                model.grid.place_agent(Waste(model, zc.waste_type), pos)
 
     def _place_robots(self, model: SystemModel, spawning_config: dict) -> None:
-        robot_map: dict[str, Type[GreenAgent | YellowAgent | RedAgent]] = {
-            "green":  GreenAgent,
-            "yellow": YellowAgent,
-            "red":    RedAgent,
-        }
-        count_keys: dict[str, str] = {
-            "green":  "n_green",
-            "yellow": "n_yellow",
-            "red":    "n_red",
-        }
-
-        for zone, AgentClass in robot_map.items():
-            n = spawning_config.get(count_keys[zone], 0)
+        for zc in _ZONE_CONFIGS:
+            n = spawning_config.get(zc.robot_count_key, 0)
             for _ in range(n):
-                pos = self._pop_cell(zone, AgentClass.__name__)
-                agent = AgentClass(model)
-                model.grid.place_agent(agent, pos)
+                pos = self._pop_cell(zc.zone, zc.robot_class.__name__)
+                model.grid.place_agent(zc.robot_class(model), pos)

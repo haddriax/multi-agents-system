@@ -29,13 +29,14 @@ class SystemModel(Model):
         from src.system.tools.spawner import Spawner
         spawner = Spawner(self, self.config)
         spawner.execute_spawning()
-        
+
         self.steps = 0
         self.datacollector = DataCollector(
             # @todo Implement the DataCollector
         )
 
-
+    def get_zone(self, x: int) -> str:
+        return self.grid.get_zone(x)
 
     def step(self):
         """ Execute one world step """
