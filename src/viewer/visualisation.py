@@ -3,6 +3,7 @@ import yaml
 import solara
 from mesa.visualization import SolaraViz, make_space_component
 from mesa.visualization.components import AgentPortrayalStyle
+
 from src.system.system_model import SystemModel
 from src.system.entities.agents.green_agent import GreenAgent
 from src.system.entities.agents.yellow_agent import YellowAgent
@@ -69,17 +70,20 @@ def make_post_process(width, height):
 
     return post_process
 
-_config = _load_config()
-model = SystemModel(_config)
+
+from src.main import load_config
+from src.system.config import Config
+config: Config = load_config()
+model = SystemModel(config)
 
 space_component = make_space_component(
     agent_portrayal=agent_portrayal,
-    post_process=make_post_process(_config["grid"]["width"], _config["grid"]["height"]),
+    post_process=make_post_process(config.grid.width, config.grid.height),
 )
 
 page = SolaraViz(
     model,
     components=[space_component],
-    model_params={"config": _config},
+    model_params={"config": config.__dict__},
     name="Radioactive Waste Cleanup",
 )
