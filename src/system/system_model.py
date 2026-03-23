@@ -118,34 +118,20 @@ class SystemModel(Model):
         Execute an action for the given agent.
         Handles movement, picking up waste, dropping waste, and waiting.
         """
+        new_pos = None
+
         if action == ActionType.MOVE_UP:
             new_pos = (agent.pos[0], agent.pos[1] + 1)
-            if self.grid.out_of_bounds(new_pos):
-                return
-            self.grid.move_agent(agent, new_pos)
-
         elif action == ActionType.MOVE_DOWN:
             new_pos = (agent.pos[0], agent.pos[1] - 1)
-            if self.grid.out_of_bounds(new_pos):
-                return
-            self.grid.move_agent(agent, new_pos)
-
         elif action == ActionType.MOVE_LEFT:
             new_pos = (agent.pos[0] - 1, agent.pos[1])
-            if self.grid.out_of_bounds(new_pos):
-                return
-            self.grid.move_agent(agent, new_pos)
-
         elif action == ActionType.MOVE_RIGHT:
             new_pos = (agent.pos[0] + 1, agent.pos[1])
-            if self.grid.out_of_bounds(new_pos):
-                return
-            self.grid.move_agent(agent, new_pos)
 
         elif action == ActionType.PICK:
             # @todo: Implement picking up waste
             pass
-
         elif action == ActionType.DROP:
             # @todo: Implement dropping waste
             pass
@@ -153,6 +139,10 @@ class SystemModel(Model):
         elif action == ActionType.WAIT:
             # Just wait one turn
             pass
+
+        # Verify that the new position is valid and not occupied before moving the agent
+        if new_pos and not self.grid.out_of_bounds(new_pos) and not self.grid.is_cell_occupied(new_pos):
+            self.grid.move_agent(agent, new_pos)
 
     def _place_agents(self) -> None:
         """

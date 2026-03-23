@@ -1,5 +1,5 @@
 from mesa.space import MultiGrid
-
+from src.system.entities.agents.base_agent import BaseAgent
 
 class NavigableGrid(MultiGrid):
     def __init__(self, width: int, height: int, torus: bool = False):
@@ -13,3 +13,9 @@ class NavigableGrid(MultiGrid):
         if x < self._z2_end:
             return "z2"
         return "z3"
+
+    def is_cell_occupied(self, pos: tuple[int, int]) -> bool:
+        """
+        Vérifie si une case est occupée par un autre agent.
+        """
+        return any(isinstance(agent, BaseAgent) for agent in self.get_cell_list_contents([pos]))
