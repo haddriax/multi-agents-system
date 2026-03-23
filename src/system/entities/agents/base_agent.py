@@ -7,6 +7,8 @@ from src.system.models.knowledge import Knowledge
 from src.system.models.perception import Perception
 from src.system.models.types import RobotType
 
+import random
+
 
 class Sensor:
     """
@@ -45,7 +47,66 @@ class BaseAgent(Agent, ABC):
 
     @abstractmethod
     def deliberate(self, knowledge: Knowledge) -> ActionType:
-        raise NotImplementedError()
+        """
+        Prend une décision basée sur la situation actuelle.
+        Inclu des décisions de déplacement, de prise ou de dépôt d'objets.
+        """
+        action = self.decide_movement(knowledge)
+        if action:
+            return action
+
+        return ActionType.WAIT
+
+    def decide_movement(self, knowledge: Knowledge) -> ActionType:
+        """
+        Décide du mouvement de l'agent.
+        """
+        directions = [
+            ActionType.MOVE_UP,
+            ActionType.MOVE_DOWN,
+            ActionType.MOVE_LEFT,
+            ActionType.MOVE_RIGHT,
+            ActionType.MOVE_UP_LEFT,
+            ActionType.MOVE_UP_RIGHT,
+            ActionType.MOVE_DOWN_LEFT,
+            ActionType.MOVE_DOWN_RIGHT
+        ]
+        direction = random.choice(directions)
+        self.move(direction)
+        return direction
+
+    def move(self, direction: ActionType) -> None:
+        """
+        Gère le déplacement de l'agent dans une direction donnée.
+        """
+        x, y = self.knowledge.position
+
+        if direction == ActionType.MOVE_UP:
+            new_pos = (x, y + 1)
+        elif direction == ActionType.MOVE_DOWN:
+            new_pos = (x, y - 1)
+        elif direction == ActionType.MOVE_LEFT:
+            new_pos = (x - 1, y)
+        elif direction == ActionType.MOVE_RIGHT:
+            new_pos = (x + 1, y)
+
+        # Déplacements diagonaux éventuels
+        elif direction == ActionType.MOVE_UP_LEFT:
+            new_pos = (x - 1, y + 1)
+        elif direction == ActionType.MOVE_UP_RIGHT:
+            new_pos = (x + 1, y + 1)
+        elif direction == ActionType.MOVE_DOWN_LEFT:
+            new_pos = (x - 1, y - 1)
+        elif direction == ActionType.MOVE_DOWN_RIGHT:
+            new_pos = (x + 1, y - 1)
+        else:
+            return
+
+        # Vérifier les limites générales et spécifiques à l'agent
+        if self.is_within_grid_bounds(new_pos) and self.is_within_bounds(new_pos):
+            self.model.grid.move_agent(self, new_pos)
+            self.knowledge.position = new_pos
+
 
     def update_beliefs(self, action: ActionType, perception: Perception) -> None:
         """
@@ -75,3 +136,11 @@ class BaseAgent(Agent, ABC):
         # We get the position fro the perception there, which means it's good if the move can fail
         # But we have to @todo update the perception or let knowledge know we moved!
         self.knowledge.position = perception.perceiver_position
+
+    @abstractmethod
+    def is_within_grid_bounds(self, position: tuple[int, int]) -> bool:
+        """
+        Vérifie si la position est dans les limites générales de la grille.
+        """
+        x, y = position
+        return 0 <= x < self.model.grid.width and 0 <= y < self.model.grid.height
