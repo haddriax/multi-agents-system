@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from mesa import Agent, Model
 
@@ -38,14 +38,14 @@ class BaseAgent(Agent, ABC):
         }
 
     def step(self) -> None:
-        """ Mesa step method: Perceive, Deliberate, Do, Update knowledge (beliefs) """
+        """ Mesa step method: Perceive, Update Beliefs, Deliberate, Act """
         perception: Perception = self.model.perceive(self)
+        self.update_beliefs(perception)
         action: ActionType = self.deliberate(self.knowledge)
         self.model.do(self, action)
-        self.update_beliefs(action, perception)
+        self.knowledge.last_action = action
 
 
-    @abstractmethod
     def deliberate(self, knowledge: Knowledge) -> ActionType:
         """
         Take a decision based on the current situation.
@@ -116,31 +116,20 @@ class BaseAgent(Agent, ABC):
 
         return ActionType.WAIT
 
-    def update_beliefs(self, action: ActionType, perception: Perception) -> None:
+    def update_beliefs(self, perception: Perception) -> None:
         """
-        Update the agent's knowledge based on perception and action.
-        Converts agent-centric perception to absolute grid coordinates.
+        Update the agent's knowledge from the latest perception, before deliberation.
+        Converts agent-centric perception readings to absolute grid coordinates.
         """
-        # Store the transient knowledge first
         self.knowledge.last_perception = perception
-        self.knowledge.last_action = action
+        self.knowledge.position = perception.perceiver_position
 
         sensor_radius: int = self.sensors['optical'].radius
-
-        agent_x: int
-        agent_y: int
         agent_x, agent_y = perception.perceiver_position
 
-        # Iterate through perception readings and map to absolute coordinates
         idx = 0
         for dx in range(-sensor_radius, sensor_radius + 1):
             for dy in range(-sensor_radius, sensor_radius + 1):
                 if idx < len(perception.readings):
-                    absolute_pos = (agent_x + dx, agent_y + dy)
-                    cell_content = perception.readings[idx]
-                    self.knowledge.belief_map[absolute_pos] = cell_content
+                    self.knowledge.belief_map[(agent_x + dx, agent_y + dy)] = perception.readings[idx]
                     idx += 1
-
-        # We get the position fro the perception there, which means it's good if the move can fail
-        # But we have to @todo update the perception or let knowledge know we moved!
-        self.knowledge.position = perception.perceiver_position

@@ -29,22 +29,15 @@ def init_world():
     return model, robot_agents, config.simulation.steps
 
 if __name__ == '__main__':
-    model, robot_agents, nb_steps = init_world()
+    import os
+    import subprocess
+    import sys
 
-    for agent in robot_agents:
-        print(f"  {agent.__class__.__name__} at position {agent.pos}")
+    _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _APP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer", "app.py")
 
-    model.step()
-
-    # @todo some validation logic early on could be great?
-    for agent in robot_agents:
-        print(f"\nAnalysis of {agent.__class__.__name__}:")
-        print(f"  Actual position: {agent.pos}")
-        print(f"  Position in knowledge: {agent.knowledge.position}")
-        print(f"  Last action: {agent.knowledge.last_action}")
-        print(f"  Perception readings count: {len(agent.knowledge.last_perception.readings)}")
-        print(f"  Belief map entries: {len(agent.knowledge.belief_map)}")
-
-    for i in range(nb_steps):
-        model.step()
-        print(f"Step {i} done.")
+    subprocess.run(
+        [sys.executable, "-m", "solara", "run", _APP_PATH] + sys.argv[1:],
+        cwd=_PROJECT_ROOT,
+        check=True,
+    )
