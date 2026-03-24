@@ -13,8 +13,10 @@ from src.system.entities.objects.waste import Waste
 
 
 class SystemModel(Model):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config | None = None) -> None:
         super().__init__()
+        if config is None:
+            config = Config.from_yaml("config.yaml")
 
         self.config = config
         width: int = config.grid.width
@@ -26,19 +28,37 @@ class SystemModel(Model):
         spawner = Spawner(self, config)
         spawner.execute_spawning()
 
-        self.steps = 0
         self.datacollector = DataCollector(
-            # @todo Implement the DataCollector
+            model_reporters={
+                "Waste (Green)":  lambda m: sum(
+                    1 for a in m.agents if isinstance(a, Waste) and a.type == WasteType.GREEN
+                ),
+                "Waste (Yellow)": lambda m: sum(
+                    1 for a in m.agents if isinstance(a, Waste) and a.type == WasteType.YELLOW
+                ),
+                "Waste (Red)":    lambda m: sum(
+                    1 for a in m.agents if isinstance(a, Waste) and a.type == WasteType.RED
+                ),
+                "Agents Carrying": lambda m: sum(
+                    1 for a in m.agents
+                    if isinstance(a, BaseAgent) and len(a.knowledge.carried_wastes) > 0
+                ),
+                "Grid Coverage (%)": lambda m: (
+                    len(set().union(*(
+                        a.knowledge.belief_map.keys()
+                        for a in m.agents if isinstance(a, BaseAgent)
+                    ))) / (m.grid.width * m.grid.height) * 100
+                ),
+            }
         )
 
     def get_zone(self, x: int) -> str:
         return self.grid.get_zone(x)
 
     def step(self):
-        """ Execute one world step """
+        """ Execute one world step. Note: self.steps is managed by Mesa (_do_step wrapper). """
         self.datacollector.collect(self)
         self.agents.shuffle_do("step")
-        self.steps += 1
 
     def perceive(self, agent: BaseAgent) -> Perception:
         """
@@ -124,6 +144,30 @@ class SystemModel(Model):
 
         elif action == ActionType.MOVE_RIGHT:
             new_pos = (agent.pos[0] + 1, agent.pos[1])
+            if self.grid.out_of_bounds(new_pos):
+                return
+            self.grid.move_agent(agent, new_pos)
+
+        elif action == ActionType.MOVE_UP_LEFT:
+            new_pos = (agent.pos[0] - 1, agent.pos[1] + 1)
+            if self.grid.out_of_bounds(new_pos):
+                return
+            self.grid.move_agent(agent, new_pos)
+
+        elif action == ActionType.MOVE_UP_RIGHT:
+            new_pos = (agent.pos[0] + 1, agent.pos[1] + 1)
+            if self.grid.out_of_bounds(new_pos):
+                return
+            self.grid.move_agent(agent, new_pos)
+
+        elif action == ActionType.MOVE_DOWN_LEFT:
+            new_pos = (agent.pos[0] - 1, agent.pos[1] - 1)
+            if self.grid.out_of_bounds(new_pos):
+                return
+            self.grid.move_agent(agent, new_pos)
+
+        elif action == ActionType.MOVE_DOWN_RIGHT:
+            new_pos = (agent.pos[0] + 1, agent.pos[1] - 1)
             if self.grid.out_of_bounds(new_pos):
                 return
             self.grid.move_agent(agent, new_pos)
