@@ -77,6 +77,7 @@ class BaseAgent(Agent, ABC):
     def decide_movement(self) -> ActionType:
         """
         Décide du mouvement de l'agent.
+        @todo should take care of following the path, or asking for a recalculation of the path.
         """
         directions = [
             ActionType.MOVE_UP,
@@ -115,6 +116,21 @@ class BaseAgent(Agent, ABC):
             return ActionType.MOVE_DOWN
 
         return ActionType.WAIT
+
+    def _find_possible_closest_waste(self, knowledge: Knowledge) -> tuple[int, int] | None:
+        """ Look in memory to find the closest waste. """
+        best_pos = None
+        best_dist = float('inf')
+
+        for pos, cell in knowledge.belief_map.items():
+            if cell.waste_type == self.robot_type:
+                # Just use manhattan distance for now, can change later if needed
+                dist = abs(pos[0] - knowledge.position[0]) + abs(pos[1] - knowledge.position[1])
+                if dist < best_dist:
+                    best_dist = dist
+                    best_pos = pos
+
+        return best_pos
 
     def update_beliefs(self, perception: Perception) -> None:
         """

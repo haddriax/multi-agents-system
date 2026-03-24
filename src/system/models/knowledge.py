@@ -14,3 +14,10 @@ class Knowledge(BaseModel):
     # Transient knowledge
     last_perception: Perception | None = None
     last_action:     ActionType | None = None
+
+    # Bot behavior
+    planned_path: list[tuple[int, int]] = []
+    """ Path build by the Pathfinder, based on the bot belief """
+
+    current_goal: tuple[int, int] | None = None
+    """ The target cell when the bot must go. Use it for goal comparison, like 'did the waste here disappeared?' """

@@ -123,6 +123,7 @@ class SystemModel(Model):
         """
         Execute an action for the given agent.
         Handles movement, picking up waste, dropping waste, and waiting.
+        @todo we should return a bool for success or failure of the action.
         """
         new_pos = None
 
