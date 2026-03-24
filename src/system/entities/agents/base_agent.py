@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 
 from mesa import Agent, Model
 
@@ -45,7 +45,6 @@ class BaseAgent(Agent, ABC):
         self.update_beliefs(action, perception)
 
 
-    @abstractmethod
     def deliberate(self, knowledge: Knowledge) -> ActionType:
         """
         Take a decision based on the current situation.
