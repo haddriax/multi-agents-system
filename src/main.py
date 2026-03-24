@@ -39,4 +39,5 @@ if __name__ == '__main__':
     subprocess.run(
         [sys.executable, "-m", "solara", "run", _APP_PATH] + sys.argv[1:],
         cwd=_PROJECT_ROOT,
+        check=True,
     )
