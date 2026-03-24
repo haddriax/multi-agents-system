@@ -9,4 +9,7 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "pyyaml>=6.0.3",
+    "solara>=1.57.3",
+    "networkx>=3.6.1",
+    "altair>=6.0.0",
 ]

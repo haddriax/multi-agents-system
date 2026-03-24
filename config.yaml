@@ -1,8 +1,9 @@
 simulation:
   steps: 20
+  step_jump: 1   # simulation steps executed each viewer tick
 grid:
-  width: 80
-  height: 20
+  width: 60
+  height: 40
 spawning:
   n_green: 5
   n_yellow: 5
@@ -10,3 +11,20 @@ spawning:
   n_waste_green: 8
   n_waste_yellow: 4
   n_waste_red: 2
+
+# Change everything about the viewer (Solara) here.
+viewer:
+  # Agent colors
+  robot_color_green:  "limegreen"
+  robot_color_yellow: "gold"
+  robot_color_red:    "tomato"
+  disposal_zone_color: "purple"
+  waste_color_green:  "#00aa00"
+  waste_color_yellow: "#ccaa00"
+  waste_color_red:    "#cc2200"
+  # Zone background colors
+  zone_color_z1: "lightgreen"
+  zone_color_z2: "lightyellow"
+  zone_color_z3: "lightcoral"
+  # Auto-play speed (seconds between ticks)
+  play_interval: 0.3
