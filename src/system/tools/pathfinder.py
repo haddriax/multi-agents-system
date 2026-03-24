@@ -1,16 +1,72 @@
-from src.system.models.action import ActionType
+import heapq
+
 from src.system.models.knowledge import Knowledge
+from src.system.models.types import RobotType
 
 
 class Pathfinder:
     @staticmethod
-    def a_star_find_path_to(start: tuple[int, int], goal: tuple[int, int], belief_map: Knowledge) -> list[tuple[int, int]]:
+    def a_star_find_path_to(
+        start: tuple[int, int],
+        goal: tuple[int, int],
+        knowledge: Knowledge,
+        grid_width: int,
+        grid_height: int,
+    ) -> list[tuple[int, int]]:
         """
-        Uses A* algorithm to find a path from start to goal, based on an agent So wknowledge map rather than ground truth.
-        We return a list of coordinates rather than ActionType, that's the bot's job.
+        A* pathfinding over the agent's belief map rather than ground truth.
+        Unknown cells are treated as passable (optimistic exploration).
+        Cells known to contain another bot are treated as blocked.
+        We could say that bot don't know the grid size beforehand, but its acceptable that way.
+
+        Returns a list of positions from start (exclusive) to goal (inclusive).
+        Returns an empty list if no path exists.
         """
-        # @todo implement the pathfinding
-        # @todo the agent will execute the list of action to get to the postion
-        # @todo path should be recalculated only IF an unexpected event occurs (case blocked, waste not here) or goal changes
-        print("Pathfinder::a_star_find_path_to: Not implemented yet")
-        return []
+        if start == goal:
+            return []
+
+        # That's the cost of moving in that direction. Note that we use approx sqrt(2) for diagonals to account for distance
+        # (dx, dy, cost)
+        directions = [
+            (0,  1, 1.0),  (0, -1, 1.0),  (1, 0, 1.0),  (-1, 0, 1.0),
+            (1,  1, 1.414), (1, -1, 1.414), (-1, 1, 1.414), (-1, -1, 1.414),
+        ]
+
+        def is_passable(pos: tuple[int, int]) -> bool:
+            x, y = pos
+            if not (0 <= x < grid_width and 0 <= y < grid_height):
+                return False
+            if pos == goal:
+                return True  # goal may have waste on it: always reachable
+            cell = knowledge.belief_map.get(pos)
+            if cell is None:
+                return True  # unseen cell: always assume passable!
+            return cell.robot_type == RobotType.NONE
+
+        open_set: list[tuple[float, tuple[int, int]]] = [(0.0, start)]
+        came_from: dict[tuple[int, int], tuple[int, int]] = {}
+        g_score: dict[tuple[int, int], float] = {start: 0.0}
+
+        while open_set:
+            _, current = heapq.heappop(open_set)
+
+            if current == goal:
+                path = []
+                while current in came_from:
+                    path.append(current)
+                    current = came_from[current]
+                path.reverse()
+                return path
+
+            for dx, dy, cost in directions:
+                neighbor = (current[0] + dx, current[1] + dy)
+                if not is_passable(neighbor):
+                    continue
+                tentative_g = g_score[current] + cost
+                if tentative_g < g_score.get(neighbor, float('inf')):
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    h = abs(neighbor[0] - goal[0]) + abs(neighbor[1] - goal[1])
+                    heapq.heappush(open_set, (tentative_g + h, neighbor))
+
+        return []  # no path found

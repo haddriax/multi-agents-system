@@ -6,6 +6,7 @@ from src.system.models.action import ActionType
 from src.system.models.knowledge import Knowledge
 from src.system.models.perception import Perception
 from src.system.models.types import RobotType
+from src.system.tools.pathfinder import Pathfinder
 
 import random
 
@@ -48,31 +49,44 @@ class BaseAgent(Agent, ABC):
 
     def deliberate(self, knowledge: Knowledge) -> ActionType:
         """
-        Take a decision based on the current situation.
+        Path-following deliberation:
+        1. Validate current goal (waste may have disappeared)
+        2. Find a new goal if needed and compute A* path
+        3. Follow the path — wait if the next cell is blocked by a bot
+        4. Explore randomly if no known waste
         """
-        # Verify if there is a waste of the agent's type in the immediate perception
-        target_pos = None
-        for pos, cell_content in knowledge.belief_map.items():
-            if cell_content.waste_type == self.robot_type:
-                target_pos = pos
-                break
+        # 1. Validate current goal
+        if knowledge.current_goal is not None:
+            cell = knowledge.belief_map.get(knowledge.current_goal)
+            if cell is None or cell.waste_type.value != self.robot_type.value:
+                knowledge.current_goal = None
+                knowledge.planned_path = []
 
-        # If no waste if found in the immediate perception, check the belief map for known waste locations
-        if not target_pos:
-            for pos, cell_content in knowledge.belief_map.items():
-                if cell_content.waste_type == self.robot_type:
-                    target_pos = pos
-                    break
+        # 2. Find new goal and compute path
+        if knowledge.current_goal is None:
+            goal = self._find_possible_closest_waste(knowledge)
+            if goal:
+                knowledge.current_goal = goal
+                knowledge.planned_path = Pathfinder.a_star_find_path_to(
+                    knowledge.position, goal, knowledge,
+                    self.model.grid.width, self.model.grid.height,
+                )
 
-        # If a target position is found, move towards it; otherwise, decide a random movement to explore
-        if target_pos:
-            return self.move_towards(target_pos)
+        # 3. Follow the path
+        if knowledge.planned_path:
+            next_pos = knowledge.planned_path[0]
+            cell = knowledge.belief_map.get(next_pos)
+            if cell is not None and cell.robot_type != RobotType.NONE:
+                return ActionType.WAIT  # blocked by a bot — retry next turn
+            knowledge.planned_path.pop(0)
+            return self.move_towards(next_pos)
 
-        action = self.decide_movement()
-        if action:
-            return action
+        # 4. Bot is on goal
+        if knowledge.current_goal == self.pos:
+            return ActionType.WAIT
 
-        return ActionType.WAIT
+        # 5. No known waste — explore randomly
+        return self.decide_movement()
 
     def decide_movement(self) -> ActionType:
         """
@@ -123,7 +137,7 @@ class BaseAgent(Agent, ABC):
         best_dist = float('inf')
 
         for pos, cell in knowledge.belief_map.items():
-            if cell.waste_type == self.robot_type:
+            if cell.waste_type.value == self.robot_type.value:
                 # Just use manhattan distance for now, can change later if needed
                 dist = abs(pos[0] - knowledge.position[0]) + abs(pos[1] - knowledge.position[1])
                 if dist < best_dist:
