@@ -1,8 +1,7 @@
 """
-Solara entry point for the multi-agent radioactive waste visualisation.
+Solara visualisation module for the multi-agent radioactive waste simulation.
 
-Preferred:  solara run src/viewer/app.py
-Also works: python src/viewer/app.py [--host HOST] [--port PORT]
+Entry point: python -m src.main [--host HOST] [--port PORT]
 """
 import os
 
@@ -14,15 +13,3 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 config = Config.from_yaml(os.path.join(_PROJECT_ROOT, "config.yaml"))
 page   = create_visualization(config)
 
-if __name__ == "__main__" and not os.environ.get("_SOLARA_LAUNCHED"):
-    import subprocess
-    import sys
-
-    env = os.environ.copy()
-    env["_SOLARA_LAUNCHED"] = "1"
-
-    subprocess.run(
-        [sys.executable, "-m", "solara", "run", os.path.abspath(__file__)] + sys.argv[1:],
-        cwd=_PROJECT_ROOT,
-        env=env,
-    )
