@@ -7,6 +7,9 @@ from src.system.entities.objects.waste import Waste
 from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
 from src.system.models.types import WasteType
 
+# @todo bots with goals should be highlighted
+# @todo bots bath should be visible maybe
+
 _INVISIBLE = AgentPortrayalStyle(size=0, alpha=0, color="white")
 
 _WASTE_COLORS = {
