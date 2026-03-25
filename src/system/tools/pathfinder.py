@@ -17,7 +17,7 @@ class Pathfinder:
         A* pathfinding over the agent's belief map rather than ground truth.
         Unknown cells are treated as passable (optimistic exploration).
         Cells known to contain another bot are treated as blocked.
-        We could say that bot don't know the grid size beforehand, but its acceptable that way.
+        We could say that bots don't know the grid size beforehand, but it's acceptable that way.
 
         Returns a list of positions from start (exclusive) to goal (inclusive).
         Returns an empty list if no path exists.
