@@ -16,7 +16,7 @@ class Knowledge(BaseModel):
     last_action:     ActionType | None = None
 
     # Bot behavior
-    planned_path: list[tuple[int, int]] = []
+    planned_path: list[tuple[int, int]] = Field(default_factory=list)
     """ Path build by the Pathfinder, based on the bot belief """
 
     current_goal: tuple[int, int] | None = None
