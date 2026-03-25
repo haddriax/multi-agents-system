@@ -24,7 +24,7 @@ class OpticalSensor(Sensor):
     """
     The most basic and principal sensor.
     """
-    def __init__(self, radius: int = 2) -> None:
+    def __init__(self, radius: int = 3) -> None:
         super().__init__(radius)
 
 
