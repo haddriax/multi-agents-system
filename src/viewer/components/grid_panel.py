@@ -5,7 +5,7 @@ from mesa.visualization.mpl_space_drawing import draw_space
 from mesa.visualization.utils import update_counter
 
 from src.system.config import Config
-from src.viewer.portrayals import agent_portrayal
+from src.viewer.portrayals import make_agent_portrayal
 
 
 def _make_post_process(config: Config):
@@ -48,7 +48,15 @@ def make_grid_panel(config: Config):
         space = getattr(model, "grid", None) or getattr(model, "space", None)
         fig = Figure(figsize=(fig_w, fig_h))
         ax = fig.add_subplot()
-        draw_space(space, agent_portrayal, ax=ax)
+        # Set axes limits first so the transform is live, then read exactly
+        # how many display pixels one grid cell spans and convert to points.
+        # This accounts for subplot margins so marker sizes are always accurate.
+        ax.set_xlim(-0.5, space.width - 0.5)
+        ax.set_ylim(-0.5, space.height - 0.5)
+        x0_px, _ = ax.transData.transform((0, 0))
+        x1_px, _ = ax.transData.transform((1, 0))
+        cell_pts = abs(x1_px - x0_px) * 72 / fig.dpi
+        draw_space(space, make_agent_portrayal(cell_pts), ax=ax)
         post_process(ax)
         solara.FigureMatplotlib(fig, format="png", bbox_inches="tight")
 
