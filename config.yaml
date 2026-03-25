@@ -2,7 +2,7 @@ simulation:
   steps: 20
   step_jump: 1   # simulation steps executed each viewer tick
 grid:
-  width: 60
+  width: 80
   height: 40
 spawning:
   n_green: 5
@@ -27,4 +27,4 @@ viewer:
   zone_color_z2: "lightyellow"
   zone_color_z3: "lightcoral"
   # Auto-play speed (seconds between ticks)
-  play_interval: 0.3
+  play_interval: 0.5
