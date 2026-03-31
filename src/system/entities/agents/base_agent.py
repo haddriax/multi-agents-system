@@ -102,11 +102,8 @@ class BaseAgent(Agent, ABC):
         if knowledge.current_goal == self.pos:
             return WaitAction()
 
-        # 5. No known waste — explore randomly
-        return self.decide_movement()
-
-    def decide_movement(self) -> MoveAction:
-        """ Pick a random direction to explore. """
+        # 5. Exploring randomly when there's no waste detected.
+        # @todo proper exploration logic
         return MoveAction(random.choice(list(Direction)))
 
     def move_towards(self, target_pos: tuple[int, int]) -> MoveAction:
