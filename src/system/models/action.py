@@ -79,7 +79,10 @@ class MoveAction(Action):
 
 @dataclass(frozen=True)
 class PickAction(Action):
-    """ Agent attempt to pick the waste on the same cell they are. """
+    """
+    Agent attempt to pick the waste on the same cell they are.
+    Done by removing the Agent from the Grid and keeping a reference to it through the agent.
+    """
     def execute(self, model: SystemModel, agent: BaseAgent) -> ActionResult:
         cell_agents = model.grid.get_cell_list_contents([agent.pos])
         waste_agents = [a for a in cell_agents if isinstance(a, Waste)]
@@ -106,17 +109,15 @@ class PickAction(Action):
 
 @dataclass(frozen=True)
 class DropAction(Action):
+    """ Drop the carried Waste on the same cell the Agent is. """
     def execute(self, model: SystemModel, agent: BaseAgent) -> ActionResult:
         if not agent.knowledge.carried_wastes:
             return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
 
-        cell_agents = model.grid.get_cell_list_contents([agent.pos])
-        if not any(isinstance(a, WasteDisposalZone) for a in cell_agents):
-            return ActionFailure(FailureReason.NOT_AT_DISPOSAL_ZONE)
+        coordinates = agent.knowledge.position
+        waste_to_drop = agent.knowledge.carried_wastes.pop()
 
-        waste = agent.knowledge.carried_wastes.pop()
-        if waste in model.agents:
-            model.grid.remove_agent(waste)
+        model.grid.place_agent(waste_to_drop, coordinates)
 
         return ActionSuccess()
 
