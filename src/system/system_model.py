@@ -6,25 +6,11 @@ from src.system.config import Config
 from src.system.entities.agents.base_agent import BaseAgent
 from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
-from src.system.models.action import ActionType
+from src.system.models.action import Action, ActionResult
 from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
 
-class ActionResult:
-    """ Structure returned by actions methods. Bool for now but ready to have messages. """
-    def __init__(self, action_type: ActionType, success: bool):
-        self.action_type = action_type
-        self.success = success
-
-class ActionInvalidException(Exception):
-    """ Exception to raise when an illegal action is called. """
-    def __init__(self, illegal_action: ActionType, message: str):
-        self.illegal_action = illegal_action
-        self.message = message
-
-    def __str__(self) -> str:
-        return f"Illegal action: {str(self.illegal_action)} - {self.message}"
 
 class SystemModel(Model):
     def __init__(self, config: Config | None = None) -> None:
@@ -77,19 +63,18 @@ class SystemModel(Model):
     def perceive(self, agent: BaseAgent) -> Perception:
         """
         Create a perception for the agent based on its sensor readings.
-        Returns a view of the world, condionned by the senor and centered on the agent.
+        Returns a view of the world, conditioned by the sensor and centered on the agent.
         """
         sensor_radius = agent.sensors['optical'].radius
 
-        neighbor_positions: Sequence[tuple[[int, int]]] = self.grid.get_neighborhood(
+        neighbor_positions: Sequence[tuple[int, int]] = self.grid.get_neighborhood(
             agent.pos,
             moore=True,
             include_center=True,
             radius=sensor_radius
         )
 
-        # Build all of the CellContent for each neighboring cell
-        # @todo I think there's way to optimise that.
+        # @todo There's likely a way to optimise that.
         readings = []
         for pos in neighbor_positions:
             cell_agents = self.grid.get_cell_list_contents([pos])
@@ -119,10 +104,7 @@ class SystemModel(Model):
                 radioactivity_value = agent.level
             elif isinstance(agent, Waste):
                 waste_type = agent.type
-                if hasattr(agent, 'quantity'):
-                    waste_quantity = agent.quantity
-                else:
-                    waste_quantity = 1
+                waste_quantity = getattr(agent, 'quantity', 1)
             elif isinstance(agent, BaseAgent):
                 robot_type = agent.robot_type
 
@@ -133,90 +115,7 @@ class SystemModel(Model):
             robot_type=robot_type,
         )
 
-    def do(self, agent: BaseAgent, action: ActionType) -> None:
-        """
-        Execute an action for the given agent.
-        Handles movement, picking up waste, dropping waste, and waiting.
-        @todo we should return a bool for success or failure of the action.
-        """
-        new_pos = None
-
-        if action == ActionType.MOVE_UP:
-            new_pos = (agent.pos[0], agent.pos[1] + 1)
-        elif action == ActionType.MOVE_DOWN:
-            new_pos = (agent.pos[0], agent.pos[1] - 1)
-        elif action == ActionType.MOVE_LEFT:
-            new_pos = (agent.pos[0] - 1, agent.pos[1])
-        elif action == ActionType.MOVE_RIGHT:
-            new_pos = (agent.pos[0] + 1, agent.pos[1])
-
-        elif action == ActionType.MOVE_UP_LEFT:
-            new_pos = (agent.pos[0] - 1, agent.pos[1] + 1)
-        elif action == ActionType.MOVE_UP_RIGHT:
-            new_pos = (agent.pos[0] + 1, agent.pos[1] + 1)
-        elif action == ActionType.MOVE_DOWN_LEFT:
-            new_pos = (agent.pos[0] - 1, agent.pos[1] - 1)
-        elif action == ActionType.MOVE_DOWN_RIGHT:
-            new_pos = (agent.pos[0] + 1, agent.pos[1] - 1)
-
-        elif action == ActionType.PICK:
-            # @todo: Implement picking up waste
-            pass
-        elif action == ActionType.DROP:
-            # @todo: Implement dropping waste
-            pass
-
-        elif action == ActionType.WAIT:
-            # Just wait one turn
-            pass
-
-        # Verify that the new position is valid and not occupied before moving the agent
-        if new_pos and not self.grid.out_of_bounds(new_pos) and not self.grid.is_cell_occupied(new_pos):
-            self.grid.move_agent(agent, new_pos)
-
-    def agent_pick_waste(self, agent: BaseAgent, waste_target: WasteType) -> ActionResult:
-        """
-        Handle the logic for an agent picking up waste.
-        Checks if there's waste at the agent's position and if the agent can pick it up.
-        """
-        action_definition = ActionType.PICK
-        cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
-        waste_agents = [a for a in cell_agents if isinstance(a, Waste)]
-
-        # FAILURE: No waste to pick up
-        if not waste_agents:
-            return ActionResult(action_definition, False)
-
-        # Get the waste matching waste_target
-        waste_to_pick: Waste
-        for waste in waste_agents:
-            if waste.type == waste_target:
-                waste_to_pick = waste
-                break
-        else:
-            # FAILURE: No waste match the one we want
-            return ActionResult(action_definition, False)
-
-        # FAILURE: Waste is too high tier for the agent to pick up
-        # It's a safeguard about the game rules, so we raise here since it should never happen!
-        if waste_to_pick.tier > agent.tier:
-            raise ActionInvalidException(
-                action_definition,
-                "Agent cannot pick up waste of tier higher than its own tier."
-            )
-
-        # FAILURE: Carry limit reached
-        # We raise there as well, because that means the agent logic is flawed.
-        if len(agent.knowledge.carried_wastes) >= agent.carry_capacity:
-            raise ActionInvalidException(
-                action_definition,
-                "Agent cannot pick up more waste than it can carry"
-            )
-
-        agent.knowledge.carried_wastes.append(waste_to_pick)
-
-
-        self.grid.remove_agent(waste_to_pick)
-
-        return ActionResult(action_definition, True)
-
+    def do(self, agent: BaseAgent, action: Action) -> ActionResult:
+        """ Validate and execute an action for the given agent. """
+        # @todo possible validation by the model here before executing?
+        return action.execute(self, agent)

@@ -2,10 +2,10 @@ from abc import ABC
 
 from mesa import Agent, Model
 
-from src.system.models.action import ActionType
+from src.system.models.action import Action, ActionResult, MoveAction, WaitAction
 from src.system.models.knowledge import Knowledge
 from src.system.models.perception import Perception
-from src.system.models.types import RobotType
+from src.system.models.types import RobotType, Direction
 from src.system.tools.pathfinder import Pathfinder
 
 import random
@@ -60,12 +60,11 @@ class BaseAgent(Agent, ABC):
         """ Mesa step method: Perceive, Update Beliefs, Deliberate, Act """
         perception: Perception = self.model.perceive(self)
         self.update_beliefs(perception)
-        action: ActionType = self.deliberate(self.knowledge)
-        self.model.do(self, action)
+        action: Action = self.deliberate(self.knowledge)
+        result: ActionResult = self.model.do(self, action)
         self.knowledge.last_action = action
 
-
-    def deliberate(self, knowledge: Knowledge) -> ActionType:
+    def deliberate(self, knowledge: Knowledge) -> Action:
         """
         Path-following deliberation:
         1. Validate current goal (waste may have disappeared)
@@ -95,35 +94,22 @@ class BaseAgent(Agent, ABC):
             next_pos = knowledge.planned_path[0]
             cell = knowledge.belief_map.get(next_pos)
             if cell is not None and cell.robot_type != RobotType.NONE:
-                return ActionType.WAIT  # blocked by a bot — retry next turn
+                return WaitAction()  # blocked by a bot — retry next turn
             knowledge.planned_path.pop(0)
             return self.move_towards(next_pos)
 
         # 4. Bot is on goal
         if knowledge.current_goal == self.pos:
-            return ActionType.WAIT
+            return WaitAction()
 
         # 5. No known waste — explore randomly
         return self.decide_movement()
 
-    def decide_movement(self) -> ActionType:
-        """
-        Décide du mouvement de l'agent.
-        @todo should take care of following the path, or asking for a recalculation of the path.
-        """
-        directions = [
-            ActionType.MOVE_UP,
-            ActionType.MOVE_DOWN,
-            ActionType.MOVE_LEFT,
-            ActionType.MOVE_RIGHT,
-            ActionType.MOVE_UP_LEFT,
-            ActionType.MOVE_UP_RIGHT,
-            ActionType.MOVE_DOWN_LEFT,
-            ActionType.MOVE_DOWN_RIGHT
-        ]
-        return random.choice(directions)
+    def decide_movement(self) -> MoveAction:
+        """ Pick a random direction to explore. """
+        return MoveAction(random.choice(list(Direction)))
 
-    def move_towards(self, target_pos: tuple[int, int]) -> ActionType:
+    def move_towards(self, target_pos: tuple[int, int]) -> MoveAction:
         """
         Compute the action needed to move towards the target position based on the agent's current position.
         """
@@ -131,23 +117,23 @@ class BaseAgent(Agent, ABC):
         target_x, target_y = target_pos
 
         if target_x > agent_x and target_y > agent_y:
-            return ActionType.MOVE_UP_RIGHT
+            return MoveAction(Direction.UP_RIGHT)
         elif target_x > agent_x and target_y < agent_y:
-            return ActionType.MOVE_DOWN_RIGHT
+            return MoveAction(Direction.DOWN_RIGHT)
         elif target_x < agent_x and target_y > agent_y:
-            return ActionType.MOVE_UP_LEFT
+            return MoveAction(Direction.UP_LEFT)
         elif target_x < agent_x and target_y < agent_y:
-            return ActionType.MOVE_DOWN_LEFT
+            return MoveAction(Direction.DOWN_LEFT)
         elif target_x > agent_x:
-            return ActionType.MOVE_RIGHT
+            return MoveAction(Direction.RIGHT)
         elif target_x < agent_x:
-            return ActionType.MOVE_LEFT
+            return MoveAction(Direction.LEFT)
         elif target_y > agent_y:
-            return ActionType.MOVE_UP
+            return MoveAction(Direction.UP)
         elif target_y < agent_y:
-            return ActionType.MOVE_DOWN
+            return MoveAction(Direction.DOWN)
 
-        return ActionType.WAIT
+        return WaitAction()
 
     def _find_possible_closest_waste(self, knowledge: Knowledge) -> tuple[int, int] | None:
         """ Look in memory to find the closest waste. """
@@ -156,7 +142,6 @@ class BaseAgent(Agent, ABC):
 
         for pos, cell in knowledge.belief_map.items():
             if cell.waste_type.value == self.robot_type.value:
-                # Just use manhattan distance for now, can change later if needed
                 dist = abs(pos[0] - knowledge.position[0]) + abs(pos[1] - knowledge.position[1])
                 if dist < best_dist:
                     best_dist = dist
