@@ -11,6 +11,20 @@ from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
 
+class ActionResult:
+    """ Structure returned by actions methods. Bool for now but ready to have messages. """
+    def __init__(self, action_type: ActionType, success: bool):
+        self.action_type = action_type
+        self.success = success
+
+class ActionInvalidException(Exception):
+    """ Exception to raise when an illegal action is called. """
+    def __init__(self, illegal_action: ActionType, message: str):
+        self.illegal_action = illegal_action
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"Illegal action: {str(self.illegal_action)} - {self.message}"
 
 class SystemModel(Model):
     def __init__(self, config: Config | None = None) -> None:
@@ -159,4 +173,50 @@ class SystemModel(Model):
         # Verify that the new position is valid and not occupied before moving the agent
         if new_pos and not self.grid.out_of_bounds(new_pos) and not self.grid.is_cell_occupied(new_pos):
             self.grid.move_agent(agent, new_pos)
+
+    def agent_pick_waste(self, agent: BaseAgent, waste_target: WasteType) -> ActionResult:
+        """
+        Handle the logic for an agent picking up waste.
+        Checks if there's waste at the agent's position and if the agent can pick it up.
+        """
+        action_definition = ActionType.PICK
+        cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
+        waste_agents = [a for a in cell_agents if isinstance(a, Waste)]
+
+        # FAILURE: No waste to pick up
+        if not waste_agents:
+            return ActionResult(action_definition, False)
+
+        # Get the waste matching waste_target
+        waste_to_pick: Waste
+        for waste in waste_agents:
+            if waste.type == waste_target:
+                waste_to_pick = waste
+                break
+        else:
+            # FAILURE: No waste match the one we want
+            return ActionResult(action_definition, False)
+
+        # FAILURE: Waste is too high tier for the agent to pick up
+        # It's a safeguard about the game rules, so we raise here since it should never happen!
+        if waste_to_pick.tier > agent.tier:
+            raise ActionInvalidException(
+                action_definition,
+                "Agent cannot pick up waste of tier higher than its own tier."
+            )
+
+        # FAILURE: Carry limit reached
+        # We raise there as well, because that means the agent logic is flawed.
+        if len(agent.knowledge.carried_wastes) >= agent.carry_capacity:
+            raise ActionInvalidException(
+                action_definition,
+                "Agent cannot pick up more waste than it can carry"
+            )
+
+        agent.knowledge.carried_wastes.append(waste_to_pick)
+
+
+        self.grid.remove_agent(waste_to_pick)
+
+        return ActionResult(action_definition, True)
 

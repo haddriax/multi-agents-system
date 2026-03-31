@@ -30,13 +30,31 @@ class OpticalSensor(Sensor):
 
 class BaseAgent(Agent, ABC):
     robot_type = RobotType.NONE
+    tier: int = 0
 
     def __init__(self, m: Model):
         super().__init__(m)
         self.knowledge: Knowledge = Knowledge(position=(0, 0))
+        self.carry_capacity = 1
         self.sensors: dict[str, Sensor] = {
             "optical": OpticalSensor()
         }
+
+        match self.robot_type:
+            case RobotType.GREEN:
+                self.tier = 1
+            case RobotType.YELLOW:
+                self.tier = 2
+            case RobotType.RED:
+                self.tier = 3
+
+    def get_knowledge(self) -> Knowledge:
+        """ Return the knowledge object: the beliefs about the environnement."""
+        return self.knowledge
+
+    def get_state(self):
+        """ Return the state object: the current state of the agent."""
+        pass
 
     def step(self) -> None:
         """ Mesa step method: Perceive, Update Beliefs, Deliberate, Act """

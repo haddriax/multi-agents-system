@@ -12,4 +12,5 @@ class ActionType(Enum):
     MOVE_DOWN_RIGHT = 8
     WAIT = 9
     PICK = 10
-    DROP = 11
+    MERGE = 11
+    DROP = 12
