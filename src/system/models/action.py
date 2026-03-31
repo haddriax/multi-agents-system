@@ -3,32 +3,24 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from mesa import Agent
+
 from src.system.models.types import Direction
 from src.system.entities.objects.waste import Waste
-from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
 
 if TYPE_CHECKING:
     from src.system.system_model import SystemModel
     from src.system.entities.agents.base_agent import BaseAgent
 
-
-# ---------------------------------------------------------------------------
-# Failure reasons
-# ---------------------------------------------------------------------------
-
 class FailureReason(Enum):
     OUT_OF_BOUNDS        = "out_of_bounds"         # the target is outside the grid
-    CELL_OCCUPIED        = "cell_occupied"          # move target has another agent
+    CELL_OCCUPIED        = "cell_occupied"         # move target has another agent
     NO_WASTE_AT_POSITION = "no_waste_at_position"  # nothing to pick up
     WASTE_TYPE_MISMATCH  = "waste_type_mismatch"   # waste type doesn't match agent tier
     CARRY_CAPACITY_FULL  = "carry_capacity_full"   # agent at carry limit
     NOT_CARRYING_WASTE   = "not_carrying_waste"    # nothing to drop
     NOT_AT_DISPOSAL_ZONE = "not_at_disposal_zone"  # not on a WasteDisposalZone cell
 
-
-# ---------------------------------------------------------------------------
-# ActionResult sealed hierarchy
-# ---------------------------------------------------------------------------
 
 class ActionResult(ABC):
     pass
@@ -84,8 +76,8 @@ class PickAction(Action):
     Done by removing the Agent from the Grid and keeping a reference to it through the agent.
     """
     def execute(self, model: SystemModel, agent: BaseAgent) -> ActionResult:
-        cell_agents = model.grid.get_cell_list_contents([agent.pos])
-        waste_agents = [a for a in cell_agents if isinstance(a, Waste)]
+        cell_agents: list[Agent] = model.grid.get_cell_list_contents([agent.pos])
+        waste_agents: list[Waste] = [a for a in cell_agents if isinstance(a, Waste)]
 
         if not waste_agents:
             return ActionFailure(FailureReason.NO_WASTE_AT_POSITION)
@@ -114,8 +106,8 @@ class DropAction(Action):
         if not agent.knowledge.carried_wastes:
             return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
 
-        coordinates = agent.knowledge.position
-        waste_to_drop = agent.knowledge.carried_wastes.pop()
+        coordinates: tuple[int, int] = agent.knowledge.position
+        waste_to_drop: Waste = agent.knowledge.carried_wastes.pop()
 
         model.grid.place_agent(waste_to_drop, coordinates)
 
