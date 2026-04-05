@@ -6,10 +6,14 @@ from src.system.config import Config
 from src.system.entities.agents.base_agent import BaseAgent
 from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
-from src.system.models.action import Action, ActionResult
-from src.system.models.types import WasteType, RobotType
+from src.system.models.action import (
+    Action, ActionResult, ActionSuccess, ActionFailure, FailureReason,
+    MoveAction, PickAction, DropAction, WaitAction, MergeAction,
+)
+from src.system.models.types import WasteType, RobotType, Direction
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
+from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
 
 
 class SystemModel(Model):
@@ -116,6 +120,73 @@ class SystemModel(Model):
         )
 
     def do(self, agent: BaseAgent, action: Action) -> ActionResult:
-        """ Validate and execute an action for the given agent. """
-        # @todo possible validation by the model here before executing?
-        return action.execute(self, agent)
+        """ Dispatch and execute an action for the given agent. """
+        match action:
+            case MoveAction():  return self._do_move(agent, action.direction)
+            case PickAction():  return self._do_pick(agent)
+            case DropAction():  return self._do_drop(agent)
+            case WaitAction():  return ActionSuccess()
+            case MergeAction(): return ActionFailure(FailureReason.NOT_IMPLEMENTED)
+            case _:             return ActionFailure(FailureReason.NOT_IMPLEMENTED)
+
+    # ------------------------------------------------------------------
+    # Private action handlers
+    # ------------------------------------------------------------------
+
+    def _do_move(self, agent: BaseAgent, direction: Direction) -> ActionResult:
+        x, y = agent.pos
+
+        match direction:
+            case Direction.UP:         new_pos = (x,     y + 1)
+            case Direction.DOWN:       new_pos = (x,     y - 1)
+            case Direction.LEFT:       new_pos = (x - 1, y    )
+            case Direction.RIGHT:      new_pos = (x + 1, y    )
+            case Direction.UP_LEFT:    new_pos = (x - 1, y + 1)
+            case Direction.UP_RIGHT:   new_pos = (x + 1, y + 1)
+            case Direction.DOWN_LEFT:  new_pos = (x - 1, y - 1)
+            case Direction.DOWN_RIGHT: new_pos = (x + 1, y - 1)
+
+        if self.grid.out_of_bounds(new_pos):
+            return ActionFailure(FailureReason.OUT_OF_BOUNDS)
+
+        if self.grid.is_cell_occupied(new_pos):
+            return ActionFailure(FailureReason.CELL_OCCUPIED)
+
+        self.grid.move_agent(agent, new_pos)
+        return ActionSuccess()
+
+    def _do_pick(self, agent: BaseAgent) -> ActionResult:
+        """ Pick up waste matching the agent's tier from the current cell. """
+        cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
+        waste_agents: list[Waste] = [a for a in cell_agents if isinstance(a, Waste)]
+
+        if not waste_agents:
+            return ActionFailure(FailureReason.NO_WASTE_AT_POSITION)
+
+        waste_to_pick: Waste | None = None
+        for waste in waste_agents:
+            if waste.tier == agent.tier:
+                waste_to_pick = waste
+                break
+
+        if waste_to_pick is None:
+            return ActionFailure(FailureReason.WASTE_TYPE_MISMATCH)
+
+        if len(agent.knowledge.carried_wastes) >= agent.carry_capacity:
+            return ActionFailure(FailureReason.CARRY_CAPACITY_FULL)
+
+        agent.knowledge.carried_wastes.append(waste_to_pick.type)
+        self.grid.remove_agent(waste_to_pick)
+        return ActionSuccess()
+
+    def _do_drop(self, agent: BaseAgent) -> ActionResult:
+        """ Dispose of carried waste at the current cell's disposal zone. """
+        if not agent.knowledge.carried_wastes:
+            return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
+
+        cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
+        if not any(isinstance(a, WasteDisposalZone) for a in cell_agents):
+            return ActionFailure(FailureReason.NOT_AT_DISPOSAL_ZONE)
+
+        agent.knowledge.carried_wastes.pop()
+        return ActionSuccess()

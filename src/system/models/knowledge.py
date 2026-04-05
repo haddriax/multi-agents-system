@@ -1,14 +1,15 @@
 from pydantic import BaseModel, Field
 from src.system.models.perception import Perception, CellContent
 from src.system.models.action import Action
-from src.system.entities.objects.waste import Waste
+from src.system.models.types import WasteType
 
 
 class Knowledge(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     position: tuple[int, int]
-    carried_wastes: list[Waste] = Field(default_factory=list)
+    carried_wastes: list[WasteType] = Field(default_factory=list)
+    """ Types of waste currently carried. The model handles the grid-side Waste agents. """
 
     belief_map: dict[tuple[int, int], CellContent] = Field(default_factory=dict)
     """ Belief_map is memory based on last perceptions, but not ground truth! """

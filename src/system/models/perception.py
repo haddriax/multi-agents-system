@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
 from pydantic import Field
 
-from src.system.models.types import WasteType, RobotType, SensorType, MAX_WASTE_PER_CELL
+from src.system.models.types import WasteType, RobotType, MAX_WASTE_PER_CELL
 
 
 @dataclass(frozen=True)
@@ -28,12 +28,6 @@ class CellContent:
             return 2
         else:
             return 3
-
-@dataclass(frozen=True)
-class Sensor:
-    type: SensorType = Field(default=SensorType.OPTIC)
-    range: int = Field(default=1, ge=0)
-
 
 @dataclass(frozen=True)
 class Perception:

@@ -56,7 +56,7 @@ def make_grid_panel(config: Config):
         x0_px, _ = ax.transData.transform((0, 0))
         x1_px, _ = ax.transData.transform((1, 0))
         cell_pts = abs(x1_px - x0_px) * 72 / fig.dpi
-        draw_space(space, make_agent_portrayal(cell_pts), ax=ax)
+        draw_space(space, make_agent_portrayal(cell_pts, viewer_config=config.viewer), ax=ax)
         post_process(ax)
         solara.FigureMatplotlib(fig, format="png", bbox_inches="tight")
 

@@ -10,9 +10,10 @@ def WasteChart(model):
     fig = Figure(figsize=(5, 2.4))
     ax = fig.add_subplot()
     if not df.empty:
-        ax.plot(df["Waste (Green)"],  color="#00aa00", label="Green")
-        ax.plot(df["Waste (Yellow)"], color="#ccaa00", label="Yellow")
-        ax.plot(df["Waste (Red)"],    color="#cc2200", label="Red")
+        v = model.config.viewer
+        ax.plot(df["Waste (Green)"],  color=v.waste_color_green,  label="Green")
+        ax.plot(df["Waste (Yellow)"], color=v.waste_color_yellow, label="Yellow")
+        ax.plot(df["Waste (Red)"],    color=v.waste_color_red,    label="Red")
         ax.legend(fontsize=7)
         ax.set_ylim(bottom=0)
     ax.set_title("Waste remaining", fontsize=9)
@@ -27,7 +28,7 @@ def CarryingChart(model):
     fig = Figure(figsize=(5, 2.4))
     ax = fig.add_subplot()
     if not df.empty:
-        ax.plot(df["Agents Carrying"], color="steelblue")
+        ax.plot(df["Agents Carrying"], color=model.config.viewer.chart_carrying_color)
         ax.set_ylim(bottom=0)
     ax.set_title("Agents carrying waste", fontsize=9)
     ax.set_xlabel("Step", fontsize=7)
