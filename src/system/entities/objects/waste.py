@@ -10,3 +10,12 @@ class Waste(BaseObject):
         super().__init__(m)
         self.type = waste_type
         self.quantity = quantity
+        self.tier: int = 0
+
+        match waste_type:
+            case WasteType.GREEN:
+                self.tier = 1
+            case WasteType.YELLOW:
+                self.tier = 2
+            case WasteType.RED:
+                self.tier = 3

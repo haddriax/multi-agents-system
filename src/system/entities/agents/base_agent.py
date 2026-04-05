@@ -2,10 +2,10 @@ from abc import ABC
 
 from mesa import Agent, Model
 
-from src.system.models.action import ActionType
+from src.system.models.action import Action, ActionResult, ActionSuccess, MoveAction, WaitAction
 from src.system.models.knowledge import Knowledge
 from src.system.models.perception import Perception
-from src.system.models.types import RobotType
+from src.system.models.types import RobotType, Direction
 from src.system.tools.pathfinder import Pathfinder
 
 import random
@@ -30,24 +30,42 @@ class OpticalSensor(Sensor):
 
 class BaseAgent(Agent, ABC):
     robot_type = RobotType.NONE
+    tier: int = 0
 
     def __init__(self, m: Model):
         super().__init__(m)
         self.knowledge: Knowledge = Knowledge(position=(0, 0))
+        self.carry_capacity = 1
         self.sensors: dict[str, Sensor] = {
             "optical": OpticalSensor()
         }
+
+        match self.robot_type:
+            case RobotType.GREEN:
+                self.tier = 1
+            case RobotType.YELLOW:
+                self.tier = 2
+            case RobotType.RED:
+                self.tier = 3
+
+    def get_knowledge(self) -> Knowledge:
+        """ Return the knowledge object: the beliefs about the environnement."""
+        return self.knowledge
 
     def step(self) -> None:
         """ Mesa step method: Perceive, Update Beliefs, Deliberate, Act """
         perception: Perception = self.model.perceive(self)
         self.update_beliefs(perception)
-        action: ActionType = self.deliberate(self.knowledge)
-        self.model.do(self, action)
+        action: Action = self.deliberate(self.knowledge)
+        result: ActionResult = self.model.do(self, action)
         self.knowledge.last_action = action
+        # Advance the planned path only after a successful move so that a cell
+        # that became occupied between planning and execution is retried next turn.
+        if isinstance(action, MoveAction) and isinstance(result, ActionSuccess):
+            if self.knowledge.planned_path:
+                self.knowledge.planned_path.pop(0)
 
-
-    def deliberate(self, knowledge: Knowledge) -> ActionType:
+    def deliberate(self, knowledge: Knowledge) -> Action:
         """
         Path-following deliberation:
         1. Validate current goal (waste may have disappeared)
@@ -77,35 +95,18 @@ class BaseAgent(Agent, ABC):
             next_pos = knowledge.planned_path[0]
             cell = knowledge.belief_map.get(next_pos)
             if cell is not None and cell.robot_type != RobotType.NONE:
-                return ActionType.WAIT  # blocked by a bot — retry next turn
-            knowledge.planned_path.pop(0)
+                return WaitAction()  # blocked by a bot — retry next turn
+            # pop(0) happens in step() after ActionSuccess, not here
             return self.move_towards(next_pos)
 
         # 4. Bot is on goal
         if knowledge.current_goal == self.pos:
-            return ActionType.WAIT
+            return WaitAction()
 
-        # 5. No known waste — explore randomly
-        return self.decide_movement()
+        # 5. No known waste — navigate toward the nearest unseen frontier cell
+        return self._explore(knowledge)
 
-    def decide_movement(self) -> ActionType:
-        """
-        Décide du mouvement de l'agent.
-        @todo should take care of following the path, or asking for a recalculation of the path.
-        """
-        directions = [
-            ActionType.MOVE_UP,
-            ActionType.MOVE_DOWN,
-            ActionType.MOVE_LEFT,
-            ActionType.MOVE_RIGHT,
-            ActionType.MOVE_UP_LEFT,
-            ActionType.MOVE_UP_RIGHT,
-            ActionType.MOVE_DOWN_LEFT,
-            ActionType.MOVE_DOWN_RIGHT
-        ]
-        return random.choice(directions)
-
-    def move_towards(self, target_pos: tuple[int, int]) -> ActionType:
+    def move_towards(self, target_pos: tuple[int, int]) -> MoveAction:
         """
         Compute the action needed to move towards the target position based on the agent's current position.
         """
@@ -113,23 +114,23 @@ class BaseAgent(Agent, ABC):
         target_x, target_y = target_pos
 
         if target_x > agent_x and target_y > agent_y:
-            return ActionType.MOVE_UP_RIGHT
+            return MoveAction(Direction.UP_RIGHT)
         elif target_x > agent_x and target_y < agent_y:
-            return ActionType.MOVE_DOWN_RIGHT
+            return MoveAction(Direction.DOWN_RIGHT)
         elif target_x < agent_x and target_y > agent_y:
-            return ActionType.MOVE_UP_LEFT
+            return MoveAction(Direction.UP_LEFT)
         elif target_x < agent_x and target_y < agent_y:
-            return ActionType.MOVE_DOWN_LEFT
+            return MoveAction(Direction.DOWN_LEFT)
         elif target_x > agent_x:
-            return ActionType.MOVE_RIGHT
+            return MoveAction(Direction.RIGHT)
         elif target_x < agent_x:
-            return ActionType.MOVE_LEFT
+            return MoveAction(Direction.LEFT)
         elif target_y > agent_y:
-            return ActionType.MOVE_UP
+            return MoveAction(Direction.UP)
         elif target_y < agent_y:
-            return ActionType.MOVE_DOWN
+            return MoveAction(Direction.DOWN)
 
-        return ActionType.WAIT
+        return WaitAction()
 
     def _find_possible_closest_waste(self, knowledge: Knowledge) -> tuple[int, int] | None:
         """ Look in memory to find the closest waste. """
@@ -138,13 +139,52 @@ class BaseAgent(Agent, ABC):
 
         for pos, cell in knowledge.belief_map.items():
             if cell.waste_type.value == self.robot_type.value:
-                # Just use manhattan distance for now, can change later if needed
                 dist = abs(pos[0] - knowledge.position[0]) + abs(pos[1] - knowledge.position[1])
                 if dist < best_dist:
                     best_dist = dist
                     best_pos = pos
 
         return best_pos
+
+    def _explore(self, knowledge: Knowledge) -> Action:
+        """
+        Frontier exploration stub: move toward the nearest grid cell that is
+        adjacent to the known belief_map but not yet observed.
+
+        The frontier is the boundary of the agent's explored territory — every
+        in-bounds cell that neighbours at least one known cell but has not itself
+        been perceived yet.  Picking the closest frontier target and taking one
+        step toward it ensures systematic coverage rather than random wandering.
+
+        Falls back to a random move only when the entire reachable area is already
+        mapped (i.e. no frontier exists).
+        """
+        grid_w = self.model.grid.width
+        grid_h = self.model.grid.height
+        known = knowledge.belief_map
+
+        best_pos: tuple[int, int] | None = None
+        best_dist: float = float('inf')
+
+        for (kx, ky) in known:
+            for dx in range(-1, 2):
+                for dy in range(-1, 2):
+                    candidate = (kx + dx, ky + dy)
+                    if candidate in known:
+                        continue
+                    cx, cy = candidate
+                    if cx < 0 or cx >= grid_w or cy < 0 or cy >= grid_h:
+                        continue
+                    dist = abs(cx - knowledge.position[0]) + abs(cy - knowledge.position[1])
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_pos = candidate
+
+        if best_pos is not None:
+            return self.move_towards(best_pos)
+
+        # Entire reachable area is already mapped — random fallback
+        return MoveAction(random.choice(list(Direction)))
 
     def update_beliefs(self, perception: Perception) -> None:
         """
@@ -157,9 +197,15 @@ class BaseAgent(Agent, ABC):
         sensor_radius: int = self.sensors['optical'].radius
         agent_x, agent_y = perception.perceiver_position
 
+        # Loop order must match Mesa's get_neighborhood (dy-outer, dx-inner) so that
+        # each reading index maps to the correct absolute cell.  Out-of-bounds offsets
+        # are skipped — Mesa omits those cells, so they have no corresponding reading.
         idx = 0
-        for dx in range(-sensor_radius, sensor_radius + 1):
-            for dy in range(-sensor_radius, sensor_radius + 1):
+        for dy in range(-sensor_radius, sensor_radius + 1):
+            for dx in range(-sensor_radius, sensor_radius + 1):
+                abs_pos = (agent_x + dx, agent_y + dy)
+                if self.model.grid.out_of_bounds(abs_pos):
+                    continue
                 if idx < len(perception.readings):
-                    self.knowledge.belief_map[(agent_x + dx, agent_y + dy)] = perception.readings[idx]
+                    self.knowledge.belief_map[abs_pos] = perception.readings[idx]
                     idx += 1

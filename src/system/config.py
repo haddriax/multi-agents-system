@@ -42,6 +42,9 @@ class ViewerConfig:
     # Other elements
     disposal_zone_color: str = "purple"
 
+    # Chart colours
+    chart_carrying_color: str = "steelblue"
+
     # Play speed
     play_interval: float = 0.4
 

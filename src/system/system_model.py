@@ -6,10 +6,14 @@ from src.system.config import Config
 from src.system.entities.agents.base_agent import BaseAgent
 from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
-from src.system.models.action import ActionType
-from src.system.models.types import WasteType, RobotType
+from src.system.models.action import (
+    Action, ActionResult, ActionSuccess, ActionFailure, FailureReason,
+    MoveAction, PickAction, DropAction, WaitAction, MergeAction,
+)
+from src.system.models.types import WasteType, RobotType, Direction
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
+from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
 
 
 class SystemModel(Model):
@@ -63,19 +67,18 @@ class SystemModel(Model):
     def perceive(self, agent: BaseAgent) -> Perception:
         """
         Create a perception for the agent based on its sensor readings.
-        Returns a view of the world, condionned by the senor and centered on the agent.
+        Returns a view of the world, conditioned by the sensor and centered on the agent.
         """
         sensor_radius = agent.sensors['optical'].radius
 
-        neighbor_positions: Sequence[tuple[[int, int]]] = self.grid.get_neighborhood(
+        neighbor_positions: Sequence[tuple[int, int]] = self.grid.get_neighborhood(
             agent.pos,
             moore=True,
             include_center=True,
             radius=sensor_radius
         )
 
-        # Build all of the CellContent for each neighboring cell
-        # @todo I think there's way to optimise that.
+        # @todo There's likely a way to optimise that.
         readings = []
         for pos in neighbor_positions:
             cell_agents = self.grid.get_cell_list_contents([pos])
@@ -105,10 +108,7 @@ class SystemModel(Model):
                 radioactivity_value = agent.level
             elif isinstance(agent, Waste):
                 waste_type = agent.type
-                if hasattr(agent, 'quantity'):
-                    waste_quantity = agent.quantity
-                else:
-                    waste_quantity = 1
+                waste_quantity = getattr(agent, 'quantity', 1)
             elif isinstance(agent, BaseAgent):
                 robot_type = agent.robot_type
 
@@ -119,44 +119,75 @@ class SystemModel(Model):
             robot_type=robot_type,
         )
 
-    def do(self, agent: BaseAgent, action: ActionType) -> None:
-        """
-        Execute an action for the given agent.
-        Handles movement, picking up waste, dropping waste, and waiting.
-        @todo we should return a bool for success or failure of the action.
-        """
-        new_pos = None
+    def do(self, agent: BaseAgent, action: Action) -> ActionResult:
+        """ Dispatch and execute an action for the given agent. """
+        match action:
+            case MoveAction():  return self._do_move(agent, action.direction)
+            case PickAction():  return self._do_pick(agent)
+            case DropAction():  return self._do_drop(agent)
+            case WaitAction():  return ActionSuccess()
+            case MergeAction(): return ActionFailure(FailureReason.NOT_IMPLEMENTED)
+            case _:             return ActionFailure(FailureReason.NOT_IMPLEMENTED)
 
-        if action == ActionType.MOVE_UP:
-            new_pos = (agent.pos[0], agent.pos[1] + 1)
-        elif action == ActionType.MOVE_DOWN:
-            new_pos = (agent.pos[0], agent.pos[1] - 1)
-        elif action == ActionType.MOVE_LEFT:
-            new_pos = (agent.pos[0] - 1, agent.pos[1])
-        elif action == ActionType.MOVE_RIGHT:
-            new_pos = (agent.pos[0] + 1, agent.pos[1])
+    # ------------------------------------------------------------------
+    # Private action handlers
+    # ------------------------------------------------------------------
 
-        elif action == ActionType.MOVE_UP_LEFT:
-            new_pos = (agent.pos[0] - 1, agent.pos[1] + 1)
-        elif action == ActionType.MOVE_UP_RIGHT:
-            new_pos = (agent.pos[0] + 1, agent.pos[1] + 1)
-        elif action == ActionType.MOVE_DOWN_LEFT:
-            new_pos = (agent.pos[0] - 1, agent.pos[1] - 1)
-        elif action == ActionType.MOVE_DOWN_RIGHT:
-            new_pos = (agent.pos[0] + 1, agent.pos[1] - 1)
+    def _do_move(self, agent: BaseAgent, direction: Direction) -> ActionResult:
+        x, y = agent.pos
 
-        elif action == ActionType.PICK:
-            # @todo: Implement picking up waste
-            pass
-        elif action == ActionType.DROP:
-            # @todo: Implement dropping waste
-            pass
+        match direction:
+            case Direction.UP:         new_pos = (x,     y + 1)
+            case Direction.DOWN:       new_pos = (x,     y - 1)
+            case Direction.LEFT:       new_pos = (x - 1, y    )
+            case Direction.RIGHT:      new_pos = (x + 1, y    )
+            case Direction.UP_LEFT:    new_pos = (x - 1, y + 1)
+            case Direction.UP_RIGHT:   new_pos = (x + 1, y + 1)
+            case Direction.DOWN_LEFT:  new_pos = (x - 1, y - 1)
+            case Direction.DOWN_RIGHT: new_pos = (x + 1, y - 1)
+            case _: return ActionFailure(FailureReason.INVALID_DIRECTION)
 
-        elif action == ActionType.WAIT:
-            # Just wait one turn
-            pass
+        if self.grid.out_of_bounds(new_pos):
+            return ActionFailure(FailureReason.OUT_OF_BOUNDS)
 
-        # Verify that the new position is valid and not occupied before moving the agent
-        if new_pos and not self.grid.out_of_bounds(new_pos) and not self.grid.is_cell_occupied(new_pos):
-            self.grid.move_agent(agent, new_pos)
+        if self.grid.is_cell_occupied(new_pos):
+            return ActionFailure(FailureReason.CELL_OCCUPIED)
 
+        self.grid.move_agent(agent, new_pos)
+        return ActionSuccess()
+
+    def _do_pick(self, agent: BaseAgent) -> ActionResult:
+        """ Pick up waste matching the agent's tier from the current cell. """
+        cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
+        waste_agents: list[Waste] = [a for a in cell_agents if isinstance(a, Waste)]
+
+        if not waste_agents:
+            return ActionFailure(FailureReason.NO_WASTE_AT_POSITION)
+
+        waste_to_pick: Waste | None = None
+        for waste in waste_agents:
+            if waste.tier == agent.tier:
+                waste_to_pick = waste
+                break
+
+        if waste_to_pick is None:
+            return ActionFailure(FailureReason.WASTE_TYPE_MISMATCH)
+
+        if len(agent.knowledge.carried_wastes) >= agent.carry_capacity:
+            return ActionFailure(FailureReason.CARRY_CAPACITY_FULL)
+
+        agent.knowledge.carried_wastes.append(waste_to_pick.type)
+        self.grid.remove_agent(waste_to_pick)
+        return ActionSuccess()
+
+    def _do_drop(self, agent: BaseAgent) -> ActionResult:
+        """ Dispose of carried waste at the current cell's disposal zone. """
+        if not agent.knowledge.carried_wastes:
+            return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
+
+        cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
+        if not any(isinstance(a, WasteDisposalZone) for a in cell_agents):
+            return ActionFailure(FailureReason.NOT_AT_DISPOSAL_ZONE)
+
+        agent.knowledge.carried_wastes.pop()
+        return ActionSuccess()
