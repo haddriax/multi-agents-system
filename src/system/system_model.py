@@ -145,6 +145,7 @@ class SystemModel(Model):
             case Direction.UP_RIGHT:   new_pos = (x + 1, y + 1)
             case Direction.DOWN_LEFT:  new_pos = (x - 1, y - 1)
             case Direction.DOWN_RIGHT: new_pos = (x + 1, y - 1)
+            case _: return ActionFailure(FailureReason.INVALID_DIRECTION)
 
         if self.grid.out_of_bounds(new_pos):
             return ActionFailure(FailureReason.OUT_OF_BOUNDS)

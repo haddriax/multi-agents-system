@@ -14,6 +14,7 @@ class FailureReason(Enum):
     NOT_CARRYING_WASTE   = "not_carrying_waste"    # nothing to drop
     NOT_AT_DISPOSAL_ZONE = "not_at_disposal_zone"  # not on a WasteDisposalZone cell
     NOT_IMPLEMENTED      = "not_implemented"       # action type exists but is not yet implemented
+    INVALID_DIRECTION    = "invalid_direction"     # direction value is not a known Direction member
 
 class ActionResult(ABC):
     pass
