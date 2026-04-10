@@ -126,7 +126,7 @@ class SystemModel(Model):
             case PickAction():  return self._do_pick(agent)
             case DropAction():  return self._do_drop(agent)
             case WaitAction():  return ActionSuccess()
-            case MergeAction(): return ActionFailure(FailureReason.NOT_IMPLEMENTED)
+            case MergeAction(): return self._do_merge(agent)
             case _:             return ActionFailure(FailureReason.NOT_IMPLEMENTED)
 
     # ------------------------------------------------------------------
@@ -190,4 +190,42 @@ class SystemModel(Model):
             return ActionFailure(FailureReason.NOT_AT_DISPOSAL_ZONE)
 
         agent.knowledge.carried_wastes.pop()
+        return ActionSuccess()
+
+    def _do_merge(self, agent: BaseAgent) -> ActionResult:
+        """
+        Merge the carried waste with a same-tier waste on the current cell.
+
+        Preconditions:
+        1. Agent carries exactly one waste whose type matches its own tier.
+           (Carrying a higher-tier waste — already a merged result — is rejected
+           with ALREADY_MERGED so agents cannot chain merges.)
+        2. Current cell has at least one waste of the agent's tier to consume.
+        3. The carried waste type has a next tier (RED cannot be merged).
+
+        On success: the cell waste is removed from the grid and the agent's
+        carried waste is upgraded to the next tier in-place.
+        """
+        # 1) Must be carrying exactly one own-tier waste
+        if len(agent.knowledge.carried_wastes) != 1:
+            return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
+
+        carried = agent.knowledge.carried_wastes[0]
+        if carried.value != agent.tier:
+            return ActionFailure(FailureReason.ALREADY_MERGED)
+
+        # 2) Next tier must exist (RED has none)
+        merged_type = carried.merged
+        if merged_type is None:
+            return ActionFailure(FailureReason.ALREADY_MERGED)
+
+        # 3) Cell must have a same-tier waste to consume
+        cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
+        waste_on_cell = [a for a in cell_agents if isinstance(a, Waste) and a.tier == agent.tier]
+        if not waste_on_cell:
+            return ActionFailure(FailureReason.NO_WASTE_AT_POSITION)
+
+        # Consume the cell waste and upgrade the carried waste to the merged type
+        self.grid.remove_agent(waste_on_cell[0])
+        agent.knowledge.carried_wastes[0] = merged_type
         return ActionSuccess()
