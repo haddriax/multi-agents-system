@@ -5,6 +5,8 @@
 
     It's also convenient to put stubs that can be filled later, and decoupling definition and execution is better for teamwork and code organization.
     Last, we can easily change the payload we sent or receive to execute action, since it's self contained.
+
+    Note: pattern is data driven, no execution logic inside the command, that would conflict with Mesa almighty model architecture.
 """
 
 from abc import ABC
@@ -55,14 +57,12 @@ class MoveAction(Action):
 @dataclass(frozen=True)
 class PickAction(Action):
     """ Agent attempts to pick up waste on the same cell. """
-    # @todo
     pass
 
 
 @dataclass(frozen=True)
 class DropAction(Action):
     """ Agent drops carried waste at the disposal zone. """
-    # @todo
     pass
 
 
@@ -91,5 +91,4 @@ class MergeAction(Action):
 
     No fields, the target is always the waste on the agent's current cell.
     """
-    # @todo
     pass
