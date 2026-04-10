@@ -8,6 +8,21 @@ class WasteType(Enum):
     RED = 3
     NONE = 0
 
+    @property
+    def merged(self) -> "WasteType | None":
+        """
+        Return the waste type produced by merging two wastes of this tier.
+        GREEN + GREEN → YELLOW
+        YELLOW + YELLOW → RED
+        RED → None  (no higher tier; cannot merge)
+        NONE → None (not a real waste; cannot merge)
+        """
+        _upgrades: dict[WasteType, WasteType] = {
+            WasteType.GREEN:  WasteType.YELLOW,
+            WasteType.YELLOW: WasteType.RED,
+        }
+        return _upgrades.get(self)
+
 class RobotType(Enum):
     GREEN = 1
     YELLOW = 2

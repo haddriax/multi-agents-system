@@ -2,7 +2,7 @@ from abc import ABC
 
 from mesa import Agent, Model
 
-from src.system.models.action import Action, ActionResult, ActionSuccess, MoveAction, WaitAction
+from src.system.models.action import Action, ActionResult, ActionSuccess, MergeAction, MoveAction, WaitAction
 from src.system.models.knowledge import Knowledge
 from src.system.models.perception import Perception
 from src.system.models.types import RobotType, Direction
@@ -35,7 +35,7 @@ class BaseAgent(Agent, ABC):
     def __init__(self, m: Model):
         super().__init__(m)
         self.knowledge: Knowledge = Knowledge(position=(0, 0))
-        self.carry_capacity = 1
+        self.carry_capacity = 1 # Current design imply only 1 carry capcity and inplace merging.
         self.sensors: dict[str, Sensor] = {
             "optical": OpticalSensor()
         }
@@ -68,11 +68,18 @@ class BaseAgent(Agent, ABC):
     def deliberate(self, knowledge: Knowledge) -> Action:
         """
         Path-following deliberation:
+        0. Merge if carrying own-tier waste and same-tier waste is underfoot
         1. Validate current goal (waste may have disappeared)
         2. Find a new goal if needed and compute A* path
-        3. Follow the path — wait if the next cell is blocked by a bot
-        4. Explore randomly if no known waste
+        3. Follow the path: wait if the next cell is blocked by a bot
+        4. Bot is on goal cell: wait for pick/drop logic
+        5. No known waste: explore toward nearest frontier cell
         """
+        # 0. Merge opportunity: carrying own-tier waste + same-tier waste on this cell
+        merge = self._should_merge(knowledge)
+        if merge is not None:
+            return merge
+
         # 1. Validate current goal
         if knowledge.current_goal is not None:
             cell = knowledge.belief_map.get(knowledge.current_goal)
@@ -113,24 +120,20 @@ class BaseAgent(Agent, ABC):
         agent_x, agent_y = self.knowledge.position
         target_x, target_y = target_pos
 
-        if target_x > agent_x and target_y > agent_y:
-            return MoveAction(Direction.UP_RIGHT)
-        elif target_x > agent_x and target_y < agent_y:
-            return MoveAction(Direction.DOWN_RIGHT)
-        elif target_x < agent_x and target_y > agent_y:
-            return MoveAction(Direction.UP_LEFT)
-        elif target_x < agent_x and target_y < agent_y:
-            return MoveAction(Direction.DOWN_LEFT)
-        elif target_x > agent_x:
-            return MoveAction(Direction.RIGHT)
-        elif target_x < agent_x:
-            return MoveAction(Direction.LEFT)
-        elif target_y > agent_y:
-            return MoveAction(Direction.UP)
-        elif target_y < agent_y:
-            return MoveAction(Direction.DOWN)
+        dx: int = (target_x > agent_x) - (target_x < agent_x)
+        dy: int = (target_y > agent_y) - (target_y < agent_y)
 
-        return WaitAction()
+        # Match the (dx, dy) vector to the correct action
+        match (dx, dy):
+            case (1, 1):   return MoveAction(Direction.UP_RIGHT)
+            case (1, -1):  return MoveAction(Direction.DOWN_RIGHT)
+            case (-1, 1):  return MoveAction(Direction.UP_LEFT)
+            case (-1, -1): return MoveAction(Direction.DOWN_LEFT)
+            case (1, 0):   return MoveAction(Direction.RIGHT)
+            case (-1, 0):  return MoveAction(Direction.LEFT)
+            case (0, 1):   return MoveAction(Direction.UP)
+            case (0, -1):  return MoveAction(Direction.DOWN)
+            case _:        return WaitAction()
 
     def _find_possible_closest_waste(self, knowledge: Knowledge) -> tuple[int, int] | None:
         """ Look in memory to find the closest waste. """
@@ -145,6 +148,36 @@ class BaseAgent(Agent, ABC):
                     best_pos = pos
 
         return best_pos
+
+    def _should_merge(self, knowledge: Knowledge) -> MergeAction | None:
+        """
+        Return a MergeAction when all merge preconditions are satisfied on the
+        current cell, otherwise None.
+
+        Conditions (mirrors _do_merge validation in SystemModel):
+        - Carrying exactly one waste whose type matches this agent's own tier.
+          (An already-merged higher-tier waste is ineligible — no chaining.)
+        - The agent's current cell (from belief_map) contains a waste of the
+          same tier to be consumed.
+        - The waste type has a next tier (RED cannot be merged).
+
+        This is a belief-based check — the model re-validates on execution.
+        """
+        if len(knowledge.carried_wastes) != 1:
+            return None
+
+        carried = knowledge.carried_wastes[0]
+        if carried.value != self.tier:
+            return None  # already carrying a merged (higher-tier) waste
+
+        if carried.merged is None:
+            return None  # RED has no higher tier
+
+        cell = knowledge.belief_map.get(knowledge.position)
+        if cell is None or cell.waste_type.value != self.tier:
+            return None  # no same-tier waste visible on this cell
+
+        return MergeAction()
 
     def _explore(self, knowledge: Knowledge) -> Action:
         """
@@ -199,7 +232,7 @@ class BaseAgent(Agent, ABC):
 
         # Loop order must match Mesa's get_neighborhood (dy-outer, dx-inner) so that
         # each reading index maps to the correct absolute cell.  Out-of-bounds offsets
-        # are skipped — Mesa omits those cells, so they have no corresponding reading.
+        # are skipped because Mesa omits those cells, so they have no corresponding reading.
         idx = 0
         for dy in range(-sensor_radius, sensor_radius + 1):
             for dx in range(-sensor_radius, sensor_radius + 1):
