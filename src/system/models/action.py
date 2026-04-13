@@ -27,7 +27,7 @@ class FailureReason(Enum):
     NOT_AT_DISPOSAL_ZONE = "not_at_disposal_zone"  # not on a WasteDisposalZone cell
     NOT_IMPLEMENTED      = "not_implemented"       # action type exists but is not yet implemented
     INVALID_DIRECTION    = "invalid_direction"     # direction value is not a known Direction member
-    ALREADY_MERGED       = "already_merged"        # carried waste is above agent tier — cannot merge further
+    ALREADY_MERGED       = "already_merged"        # carried waste is above agent tier, cannot merge further
 
 class ActionResult(ABC):
     pass

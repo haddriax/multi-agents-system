@@ -17,7 +17,7 @@ class Sensor:
     For now, we only have an optical sensor, but we could add more like radiation sensor,
     so this class force the design to work with n named sensors.
     """
-    def __init__(self, radius: int = 2) -> None:
+    def __init__(self, radius: int = 5) -> None:
         self.radius = radius
 
 class OpticalSensor(Sensor):
@@ -102,7 +102,7 @@ class BaseAgent(Agent, ABC):
             next_pos = knowledge.planned_path[0]
             cell = knowledge.belief_map.get(next_pos)
             if cell is not None and cell.robot_type != RobotType.NONE:
-                return WaitAction()  # blocked by a bot — retry next turn
+                return WaitAction()  # blocked by a bot, retry next turn
             # pop(0) happens in step() after ActionSuccess, not here
             return self.move_towards(next_pos)
 
@@ -110,7 +110,7 @@ class BaseAgent(Agent, ABC):
         if knowledge.current_goal == self.pos:
             return WaitAction()
 
-        # 5. No known waste — navigate toward the nearest unseen frontier cell
+        # 5. No known waste, navigate toward the nearest unseen frontier cell
         return self._explore(knowledge)
 
     def move_towards(self, target_pos: tuple[int, int]) -> MoveAction:
