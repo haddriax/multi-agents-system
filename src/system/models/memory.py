@@ -4,7 +4,7 @@ from src.system.models.action import Action
 from src.system.models.types import WasteType
 
 
-class Knowledge(BaseModel):
+class Memory(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     position: tuple[int, int]

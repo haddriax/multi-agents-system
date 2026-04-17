@@ -45,11 +45,11 @@ class SystemModel(Model):
                 ),
                 "Agents Carrying": lambda m: sum(
                     1 for a in m.agents
-                    if isinstance(a, BaseAgent) and len(a.knowledge.carried_wastes) > 0
+                    if isinstance(a, BaseAgent) and len(a.memory.carried_wastes) > 0
                 ),
                 "Grid Coverage (%)": lambda m: (
                     len(set().union(*(
-                        a.knowledge.belief_map.keys()
+                        a.memory.belief_map.keys()
                         for a in m.agents if isinstance(a, BaseAgent)
                     ))) / (m.grid.width * m.grid.height) * 100
                 ),
@@ -176,23 +176,23 @@ class SystemModel(Model):
         if waste_to_pick is None:
             return ActionFailure(FailureReason.WASTE_TYPE_MISMATCH)
 
-        if len(agent.knowledge.carried_wastes) >= agent.carry_capacity:
+        if len(agent.memory.carried_wastes) >= agent.carry_capacity:
             return ActionFailure(FailureReason.CARRY_CAPACITY_FULL)
 
-        agent.knowledge.carried_wastes.append(waste_to_pick.type)
+        agent.memory.carried_wastes.append(waste_to_pick.type)
         self.grid.remove_agent(waste_to_pick)
         return ActionSuccess()
 
     def _do_drop(self, agent: BaseAgent) -> ActionResult:
         """ Dispose of carried waste at the current cell's disposal zone. """
-        if not agent.knowledge.carried_wastes:
+        if not agent.memory.carried_wastes:
             return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
 
         cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
         if not any(isinstance(a, WasteDisposalZone) for a in cell_agents):
             return ActionFailure(FailureReason.NOT_AT_DISPOSAL_ZONE)
 
-        agent.knowledge.carried_wastes.pop()
+        agent.memory.carried_wastes.pop()
         return ActionSuccess()
 
     def _do_merge(self, agent: BaseAgent) -> ActionResult:
@@ -210,10 +210,10 @@ class SystemModel(Model):
         carried waste is upgraded to the next tier in-place.
         """
         # 1) Must be carrying exactly one own-tier waste
-        if len(agent.knowledge.carried_wastes) != 1:
+        if len(agent.memory.carried_wastes) != 1:
             return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
 
-        carried = agent.knowledge.carried_wastes[0]
+        carried = agent.memory.carried_wastes[0]
         if carried.value != agent.tier:
             return ActionFailure(FailureReason.ALREADY_MERGED)
 
@@ -230,5 +230,5 @@ class SystemModel(Model):
 
         # Consume the cell waste and upgrade the carried waste to the merged type
         self.grid.remove_agent(waste_on_cell[0])
-        agent.knowledge.carried_wastes[0] = merged_type
+        agent.memory.carried_wastes[0] = merged_type
         return ActionSuccess()

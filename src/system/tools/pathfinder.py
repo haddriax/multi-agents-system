@@ -1,6 +1,6 @@
 import heapq
 
-from src.system.models.knowledge import Knowledge
+from src.system.models.memory import Memory
 from src.system.models.types import RobotType
 
 
@@ -9,7 +9,7 @@ class Pathfinder:
     def a_star_find_path_to(
         start: tuple[int, int],
         goal: tuple[int, int],
-        knowledge: Knowledge,
+        memory: Memory,
         grid_width: int,
         grid_height: int,
     ) -> list[tuple[int, int]]:
@@ -38,7 +38,7 @@ class Pathfinder:
                 return False
             if pos == goal:
                 return True  # goal may have waste on it: always reachable
-            cell = knowledge.belief_map.get(pos)
+            cell = memory.belief_map.get(pos)
             if cell is None:
                 return True  # unseen cell: always assume passable!
             return cell.robot_type == RobotType.NONE
