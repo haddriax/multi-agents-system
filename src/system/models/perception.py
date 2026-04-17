@@ -29,14 +29,19 @@ class CellContent:
         else:
             return 3
 
+    def has_waste(self) -> bool:
+        return self.waste_quantity > 0
+    
+
 @dataclass(frozen=True)
 class Perception:
+
     perceiver_position: tuple[int, int]
     """
     The position of the agent perceiving.
     """
 
-    readings: tuple[CellContent, ...]
+    readings: tuple[tuple[tuple[int, int], CellContent], ...]
     """ 
     The collection of what the bot sees (all cells).
     Note that the coordinates are centered on the agent that perceives!!!

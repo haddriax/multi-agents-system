@@ -22,5 +22,5 @@ class Knowledge(BaseModel):
     planned_path: list[tuple[int, int]] = Field(default_factory=list)
     """ Path built by the Pathfinder, based on the bot's beliefs """
 
-    current_goal: tuple[int, int] | None = None
+    target_cell: tuple[int, int] | None = None
     """ The target cell the bot is heading to. Used to detect if the waste disappeared. """

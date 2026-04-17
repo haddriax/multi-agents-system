@@ -56,6 +56,9 @@ class SystemModel(Model):
             }
         )
 
+        for agent in filter(lambda a: isinstance(a, BaseAgent), self.agents):
+            agent.force_percept_update()
+
     def get_zone(self, x: int) -> str:
         return self.grid.get_zone(x)
 
@@ -83,7 +86,7 @@ class SystemModel(Model):
         for pos in neighbor_positions:
             cell_agents = self.grid.get_cell_list_contents([pos])
             cell_content = self._build_cell_content(cell_agents)
-            readings.append(cell_content)
+            readings.append((pos, cell_content))
 
         return Perception(
             perceiver_position=agent.pos,

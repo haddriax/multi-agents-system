@@ -52,6 +52,14 @@ class BaseAgent(Agent, ABC):
         """ Return the knowledge object: the beliefs about the environnement."""
         return self.knowledge
 
+    def force_percept_update(self) -> None:
+        """
+        Force an update of the beliefs, without doing a step.
+        Usually used to update the belief map of the spawning agent.
+        """
+        perception: Perception = self.model.perceive(self)
+        self.update_beliefs(perception)
+
     def step(self) -> None:
         """ Mesa step method: Perceive, Update Beliefs, Deliberate, Act """
         perception: Perception = self.model.perceive(self)
@@ -59,11 +67,44 @@ class BaseAgent(Agent, ABC):
         action: Action = self.deliberate(self.knowledge)
         result: ActionResult = self.model.do(self, action)
         self.knowledge.last_action = action
+
         # Advance the planned path only after a successful move so that a cell
         # that became occupied between planning and execution is retried next turn.
         if isinstance(action, MoveAction) and isinstance(result, ActionSuccess):
             if self.knowledge.planned_path:
                 self.knowledge.planned_path.pop(0)
+
+    def follow_goal(self, knowledge: Knowledge):
+        # 1. Validate current goal
+        if knowledge.target_cell is not None:
+            cell = knowledge.belief_map.get(knowledge.target_cell)
+            # Waste has been taken, abort the goal.
+            if not cell.has_waste:
+                knowledge.target_cell = None
+                knowledge.planned_path = []
+
+            if cell is None or cell.waste_type.value != self.robot_type.value:
+                knowledge.target_cell = None
+                knowledge.planned_path = []
+
+        # 2. Find new goal and compute path
+        if knowledge.target_cell is None:
+            goal = self._find_possible_closest_waste(knowledge)
+            if goal:
+                knowledge.target_cell = goal
+                knowledge.planned_path = Pathfinder.a_star_find_path_to(
+                    knowledge.position, goal, knowledge,
+                    self.model.grid.width, self.model.grid.height,
+                )
+
+        # 3. Follow the path
+        if knowledge.planned_path:
+            next_pos = knowledge.planned_path[0]
+            cell = knowledge.belief_map.get(next_pos)
+            if cell is not None and cell.robot_type != RobotType.NONE:
+                return WaitAction()  # blocked by a bot, retry next turn
+            # pop(0) happens in step() after ActionSuccess, not here
+            return self.move_towards(next_pos)
 
     def deliberate(self, knowledge: Knowledge) -> Action:
         """
@@ -76,22 +117,22 @@ class BaseAgent(Agent, ABC):
         5. No known waste: explore toward nearest frontier cell
         """
         # 0. Merge opportunity: carrying own-tier waste + same-tier waste on this cell
-        merge = self._should_merge(knowledge)
+        merge: MergeAction = self._should_merge(knowledge)
         if merge is not None:
             return merge
 
         # 1. Validate current goal
-        if knowledge.current_goal is not None:
-            cell = knowledge.belief_map.get(knowledge.current_goal)
+        if knowledge.target_cell is not None:
+            cell = knowledge.belief_map.get(knowledge.target_cell)
             if cell is None or cell.waste_type.value != self.robot_type.value:
-                knowledge.current_goal = None
+                knowledge.target_cell = None
                 knowledge.planned_path = []
 
         # 2. Find new goal and compute path
-        if knowledge.current_goal is None:
+        if knowledge.target_cell is None:
             goal = self._find_possible_closest_waste(knowledge)
             if goal:
-                knowledge.current_goal = goal
+                knowledge.target_cell = goal
                 knowledge.planned_path = Pathfinder.a_star_find_path_to(
                     knowledge.position, goal, knowledge,
                     self.model.grid.width, self.model.grid.height,
@@ -107,7 +148,7 @@ class BaseAgent(Agent, ABC):
             return self.move_towards(next_pos)
 
         # 4. Bot is on goal
-        if knowledge.current_goal == self.pos:
+        if knowledge.target_cell == self.pos:
             return WaitAction()
 
         # 5. No known waste, navigate toward the nearest unseen frontier cell
@@ -230,15 +271,5 @@ class BaseAgent(Agent, ABC):
         sensor_radius: int = self.sensors['optical'].radius
         agent_x, agent_y = perception.perceiver_position
 
-        # Loop order must match Mesa's get_neighborhood (dy-outer, dx-inner) so that
-        # each reading index maps to the correct absolute cell.  Out-of-bounds offsets
-        # are skipped because Mesa omits those cells, so they have no corresponding reading.
-        idx = 0
-        for dy in range(-sensor_radius, sensor_radius + 1):
-            for dx in range(-sensor_radius, sensor_radius + 1):
-                abs_pos = (agent_x + dx, agent_y + dy)
-                if self.model.grid.out_of_bounds(abs_pos):
-                    continue
-                if idx < len(perception.readings):
-                    self.knowledge.belief_map[abs_pos] = perception.readings[idx]
-                    idx += 1
+        for abs_pos, cell_content in perception.readings:
+            self.knowledge.belief_map[abs_pos] = cell_content
