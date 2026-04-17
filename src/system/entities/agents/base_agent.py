@@ -268,8 +268,8 @@ class BaseAgent(Agent, ABC):
         self.knowledge.last_perception = perception
         self.knowledge.position = perception.perceiver_position
 
-        sensor_radius: int = self.sensors['optical'].radius
-        agent_x, agent_y = perception.perceiver_position
+        # sensor_radius: int = self.sensors['optical'].radius
+        # agent_x, agent_y = perception.perceiver_position
 
         for abs_pos, cell_content in perception.readings:
             self.knowledge.belief_map[abs_pos] = cell_content
