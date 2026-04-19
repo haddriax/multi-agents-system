@@ -59,8 +59,20 @@ class SystemModel(Model):
         for agent in filter(lambda a: isinstance(a, MesaAgentAdapter), self.agents):
             agent.force_percept_update()
 
+        self._seed_disposal_zone_belief()
+
     def get_zone(self, x: int) -> str:
         return self.grid.get_zone(x)
+
+    def _seed_disposal_zone_belief(self) -> None:
+        """Add the WasteDisposalZone position into the belief_map of Red agents"""
+        zone = next((a for a in self.agents if isinstance(a, WasteDisposalZone)), None)
+        if zone is None:
+            return
+        cell_content = self._build_cell_content(self.grid.get_cell_list_contents([zone.pos]))
+        for agent in self.agents:
+            if isinstance(agent, MesaAgentAdapter) and type(agent).MAX_ZONE is None:
+                agent.memory.belief_map[zone.pos] = cell_content
 
     def step(self):
         """ Execute one world step. Note: self.steps is managed by Mesa (_do_step wrapper). """
@@ -186,10 +198,12 @@ class SystemModel(Model):
             return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
 
         cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
-        if not any(isinstance(a, WasteDisposalZone) for a in cell_agents):
+        zone = next((a for a in cell_agents if isinstance(a, WasteDisposalZone)), None)
+        if zone is None:
             return ActionFailure(FailureReason.NOT_AT_DISPOSAL_ZONE)
 
         agent.memory.carried_wastes.pop()
+        zone.waste_received += 1
         return ActionSuccess()
 
     def _do_merge(self, agent: MesaAgentAdapter, action: MergeAction) -> ActionResult:
