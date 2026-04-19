@@ -105,6 +105,7 @@ class SystemModel(Model):
         waste_type = WasteType.NONE
         waste_quantity = 0
         robot_type = RobotType.NONE
+        has_disposal_zone = False
 
         for agent in agents:
             if isinstance(agent, Radioactivity):
@@ -114,12 +115,15 @@ class SystemModel(Model):
                 waste_quantity = getattr(agent, 'quantity', 1)
             elif isinstance(agent, MesaAgentAdapter):
                 robot_type = agent.robot_type
+            elif isinstance(agent, WasteDisposalZone):
+                has_disposal_zone = True
 
         return CellContent(
             radioactivity_value=radioactivity_value,
             waste_type=waste_type,
             waste_quantity=waste_quantity,
             robot_type=robot_type,
+            has_disposal_zone=has_disposal_zone,
         )
 
     def do(self, agent: MesaAgentAdapter, action: Action) -> ActionResult:
@@ -224,3 +228,4 @@ class SystemModel(Model):
         self.grid.remove_agent(waste_on_cell[0])
         agent.memory.carried_wastes[0] = merged_type
         return ActionSuccess()
+
