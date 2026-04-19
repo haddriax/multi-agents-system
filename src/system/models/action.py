@@ -104,3 +104,13 @@ class MergeAction(Action):
     No fields, the target is always the waste on the agent's current cell.
     """
     pass
+
+
+@dataclass(frozen=True)
+class HandoffAction(Action):
+    """
+    Deposit the carried (merged) waste onto the current cell for the next-tier bot to collect.
+
+    Used by Green and Yellow at their zone boundary.
+    """
+    pass

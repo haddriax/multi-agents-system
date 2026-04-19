@@ -8,7 +8,7 @@ from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
 from src.system.models.action import (
     Action, ActionResult, ActionSuccess, ActionFailure, FailureReason,
-    MoveAction, PickAction, DropAction, WaitAction, MergeAction,
+    MoveAction, PickAction, DropAction, WaitAction, MergeAction, HandoffAction,
 )
 from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
@@ -129,12 +129,13 @@ class SystemModel(Model):
     def do(self, agent: MesaAgentAdapter, action: Action) -> ActionResult:
         """ Dispatch and execute an action for the given agent. """
         match action:
-            case MoveAction():  return self._do_move(agent, action)
-            case PickAction():  return self._do_pick(agent, action)
-            case DropAction():  return self._do_drop(agent, action)
-            case WaitAction():  return ActionSuccess()
-            case MergeAction(): return self._do_merge(agent, action)
-            case _:             return ActionFailure(FailureReason.NOT_IMPLEMENTED)
+            case MoveAction():    return self._do_move(agent, action)
+            case PickAction():    return self._do_pick(agent, action)
+            case DropAction():    return self._do_drop(agent, action)
+            case WaitAction():    return ActionSuccess()
+            case MergeAction():   return self._do_merge(agent, action)
+            case HandoffAction(): return self._do_handoff(agent, action)
+            case _:               return ActionFailure(FailureReason.NOT_IMPLEMENTED)
 
     # ------------------------------------------------------------------
     # Private action handlers
@@ -227,5 +228,15 @@ class SystemModel(Model):
         # Consume the cell waste and upgrade the carried waste to the merged type
         self.grid.remove_agent(waste_on_cell[0])
         agent.memory.carried_wastes[0] = merged_type
+        return ActionSuccess()
+
+    def _do_handoff(self, agent: MesaAgentAdapter, action: HandoffAction) -> ActionResult:
+        """ Place the carried waste onto the current cell for the next-tier bot to collect. """
+        if not agent.memory.carried_wastes:
+            return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
+
+        waste_type = agent.memory.carried_wastes.pop()
+        new_waste = Waste(self, waste_type)
+        self.grid.place_agent(new_waste, agent.pos)
         return ActionSuccess()
 
