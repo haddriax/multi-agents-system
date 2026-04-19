@@ -3,6 +3,8 @@ from typing import Callable
 
 from src.system.models.action import (
     Action,
+    DropAction,
+    HandoffAction,
     MergeAction,
     MoveAction,
     PickAction,
@@ -116,6 +118,54 @@ def _handle_seek(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Actio
     return None
 
 
+def _handle_deposit(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Action | None:
+    """Navigate to the deposit point and drop the carried waste there."""
+    if not memory.carried_wastes:
+        return None
+
+    carried = memory.carried_wastes[0]
+    grid_w, grid_h = grid_dims
+
+    if memory.max_x is not None:
+        # Green / Yellow: only deposit merged (higher-tier) waste
+        if carried.value == tier:
+            return None
+        target = (memory.max_x, memory.position[1])
+        final_action: Action = HandoffAction()
+    else:
+        # Red: deposit any carried waste at the WasteDisposalZone
+        disposal_pos = next(
+            (pos for pos, cell in memory.belief_map.items() if cell.has_disposal_zone),
+            None,
+        )
+
+        # For this version, the zone is know but in case, fallback to explo
+        if disposal_pos is None:
+            return None
+        target = disposal_pos
+        final_action = DropAction()
+
+    if memory.target_cell != target:
+        memory.target_cell = target
+        memory.planned_path = Pathfinder.a_star_find_path_to(
+            memory.position, target, memory, grid_w, grid_h,
+        )
+
+    if memory.planned_path:
+        next_pos = memory.planned_path[0]
+        cell = memory.belief_map.get(next_pos)
+        if cell is not None and cell.robot_type != RobotType.NONE:
+            return WaitAction()
+        return _move_towards(memory.position, next_pos)
+
+    if memory.position == target:
+        memory.target_cell = None
+        memory.planned_path = []
+        return final_action
+
+    return None
+
+
 def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Action:
     """Frontier exploration: step toward the nearest unobserved cell. Falls back to random."""
     grid_w, grid_h = grid_dims
@@ -149,6 +199,7 @@ def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
 # Default handler, suitable for Green and Yellow that have same behavior
 BASE_HANDLERS: list[Handler] = [
     _handle_merge,
+    _handle_deposit,
     _handle_seek,
     _handle_explore,
 ]
@@ -156,6 +207,7 @@ BASE_HANDLERS: list[Handler] = [
 # Red agent must kknow the disposal place and interact with it.
 # Also, they can't merge waste
 RED_HANDLERS: list[Handler] = [
+    _handle_deposit,
     _handle_seek,
     _handle_explore,
 ]

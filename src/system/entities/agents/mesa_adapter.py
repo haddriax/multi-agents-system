@@ -20,7 +20,7 @@ class MesaAgentAdapter(Agent, ABC):
         grid_w = model.grid.width
         max_zone = type(self).MAX_ZONE
         # For now, zone are just 1/3 of the are each. Not very scalable though.
-        max_x = (grid_w // 3 * max_zone) - 1 if max_zone is not None else None
+        max_x = (grid_w * max_zone // 3) - 1 if max_zone is not None else None
         self.robot = RobotAgent(
             tier=self._resolve_tier(),
             grid_dims=(grid_w, model.grid.height),
