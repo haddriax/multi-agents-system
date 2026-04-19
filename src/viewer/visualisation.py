@@ -83,3 +83,4 @@ page = SolaraViz(
     model_params={"config": _config},
     name="Radioactive Waste Cleanup",
 )
+page.run()

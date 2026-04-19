@@ -1,7 +1,7 @@
 from pydantic.dataclasses import dataclass
 from pydantic import Field
 
-from src.system.models.types import WasteType, RobotType, SensorType, MAX_WASTE_PER_CELL
+from src.system.models.types import WasteType, RobotType, MAX_WASTE_PER_CELL
 
 
 @dataclass(frozen=True)
@@ -14,6 +14,7 @@ class CellContent:
     waste_type: WasteType = Field(default=WasteType.NONE)
     waste_quantity: int = Field(default=0, ge=0, le=MAX_WASTE_PER_CELL)
     robot_type: RobotType = Field(default=RobotType.NONE)
+    has_disposal_zone: bool = False
 
     @property
     def get_zone(self) -> int:
@@ -29,20 +30,19 @@ class CellContent:
         else:
             return 3
 
-@dataclass(frozen=True)
-class Sensor:
-    type: SensorType = Field(default=SensorType.OPTIC)
-    range: int = Field(default=1, ge=0)
-
+    def has_waste(self) -> bool:
+        return self.waste_quantity > 0
+    
 
 @dataclass(frozen=True)
 class Perception:
+
     perceiver_position: tuple[int, int]
     """
     The position of the agent perceiving.
     """
 
-    readings: tuple[CellContent, ...]
+    readings: tuple[tuple[tuple[int, int], CellContent], ...]
     """ 
     The collection of what the bot sees (all cells).
     Note that the coordinates are centered on the agent that perceives!!!
