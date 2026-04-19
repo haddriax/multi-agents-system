@@ -90,7 +90,7 @@ def _handle_seek(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Actio
                 memory.position, goal, memory, grid_w, grid_h,
             )
 
-    # No tier-matching waste known — defer to exploration
+    # No tier-matching waste known, defer to exploration
     if memory.target_cell is None:
         return None
 
@@ -141,7 +141,7 @@ def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
     return MoveAction(random.choice(list(Direction)))
 
 
-HANDLERS: list[Handler] = [
+BASE_HANDLERS: list[Handler] = [
     _handle_merge,
     _handle_seek,
     _handle_explore,

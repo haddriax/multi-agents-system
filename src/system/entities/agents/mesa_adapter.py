@@ -2,6 +2,7 @@ from abc import ABC
 
 from mesa import Agent, Model
 
+from src.system.entities.agents.handlers import Handler
 from src.system.entities.agents.robot_agent import RobotAgent
 from src.system.entities.agents.sensors import Sensor
 from src.system.models.memory import Memory
@@ -10,12 +11,14 @@ from src.system.models.types import RobotType
 
 class MesaAgentAdapter(Agent, ABC):
     robot_type: RobotType = RobotType.NONE
+    HANDLERS: list[Handler] = []
 
     def __init__(self, model: Model) -> None:
         super().__init__(model)
         self.robot = RobotAgent(
             tier=self._resolve_tier(),
             grid_dims=(model.grid.width, model.grid.height),
+            handlers=type(self).HANDLERS,
         )
 
     def step(self) -> None:

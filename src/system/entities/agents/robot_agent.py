@@ -1,4 +1,4 @@
-from src.system.entities.agents.handlers import HANDLERS
+from src.system.entities.agents.handlers import Handler
 from src.system.entities.agents.sensors import OpticalSensor, Sensor
 from src.system.models.action import (
     Action,
@@ -15,10 +15,12 @@ class RobotAgent:
         self,
         tier: int,
         grid_dims: tuple[int, int],
+        handlers: list[Handler],
         sensors: dict[str, Sensor] | None = None,
     ) -> None:
         self.tier = tier
         self.grid_dims = grid_dims
+        self.handlers = handlers
         self.sensors: dict[str, Sensor] = sensors or {"optical": OpticalSensor()}
         self.memory: Memory = Memory(position=(0, 0))
 
@@ -30,9 +32,7 @@ class RobotAgent:
             self.memory.belief_map[abs_pos] = cell_content
 
     def deliberate(self) -> Action:
-        # Concrètement HANDLERS, ce sont les actions dans une liste par ordre de priorité
-        # Si on peut effectuer l'action : on retourne l'object d'action, sinon on va voir le prochain handler
-        for handler in HANDLERS:
+        for handler in self.handlers:
             action = handler(self.memory, self.tier, self.grid_dims)
             if action is not None:
                 return action
