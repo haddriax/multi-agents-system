@@ -10,6 +10,7 @@ from src.system.models.action import (
     Action, ActionResult, ActionSuccess, ActionFailure, FailureReason,
     MoveAction, PickAction, DropAction, WaitAction, MergeAction, HandoffAction,
 )
+from src.system.models.message import Message
 from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
@@ -252,5 +253,14 @@ class SystemModel(Model):
         waste_type = agent.memory.carried_wastes.pop()
         new_waste = Waste(self, waste_type)
         self.grid.place_agent(new_waste, agent.pos)
+        self._notify_tier(waste_type, agent.pos)
         return ActionSuccess()
+
+    def _notify_tier(self, waste_type: WasteType, pos: tuple[int, int]) -> None:
+        """Deliver a Message to all agents whose tier matches the deposited waste type."""
+        msg = Message(waste_type=waste_type, position=pos)
+        for a in self.agents:
+            if isinstance(a, MesaAgentAdapter) and a.tier == waste_type.value:
+                if not any(m.position == pos for m in a.memory.mailbox):
+                    a.memory.mailbox.append(msg)
 

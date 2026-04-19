@@ -7,7 +7,8 @@ from src.system.models.action import (
     MoveAction,
 )
 from src.system.models.memory import Memory
-from src.system.models.perception import Perception
+from src.system.models.perception import CellContent, Perception
+from src.system.models.types import RobotType
 
 
 class RobotAgent:
@@ -31,6 +32,21 @@ class RobotAgent:
         self.memory.position = perception.perceiver_position
         for abs_pos, cell_content in perception.readings:
             self.memory.belief_map[abs_pos] = cell_content
+        self._process_mailbox(perception)
+
+    def _process_mailbox(self, perception: Perception) -> None:
+        """Inject mailbox messages into the belief_map, skipping cells seen this step."""
+        perceived = {pos for pos, _ in perception.readings}
+        for msg in self.memory.mailbox:
+            if msg.position not in perceived:
+                self.memory.belief_map[msg.position] = CellContent(
+                    radioactivity_value=0.0,
+                    waste_type=msg.waste_type,
+                    waste_quantity=1,
+                    robot_type=RobotType.NONE,
+                    has_disposal_zone=False,
+                )
+        self.memory.mailbox.clear()
 
     def deliberate(self) -> Action:
         for handler in self.handlers:
