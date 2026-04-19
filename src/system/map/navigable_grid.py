@@ -1,5 +1,5 @@
 from mesa.space import MultiGrid
-from src.system.entities.agents.base_agent import BaseAgent
+from src.system.entities.agents.mesa_adapter import MesaAgentAdapter
 
 class NavigableGrid(MultiGrid):
     def __init__(self, width: int, height: int, torus: bool = False):
@@ -18,7 +18,7 @@ class NavigableGrid(MultiGrid):
         """
         Vérifie si une case est occupée par un autre agent.
         """
-        return any(isinstance(agent, BaseAgent) for agent in self.get_cell_list_contents([pos]))
+        return any(isinstance(agent, MesaAgentAdapter) for agent in self.get_cell_list_contents([pos]))
       
     def get_zone_x_range(self, zone: str) -> range:
         """Return the strict x-column range [start, end) for a given zone."""

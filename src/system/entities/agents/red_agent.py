@@ -1,11 +1,6 @@
-from src.system.entities.agents.base_agent import BaseAgent
+from src.system.entities.agents.mesa_adapter import MesaAgentAdapter
 from src.system.models.types import RobotType
-from mesa import Model
 
 
-class RedAgent(BaseAgent):
+class RedAgent(MesaAgentAdapter):
     robot_type = RobotType.RED
-
-    def __init__(self, m: Model):
-        super().__init__(m)
-

@@ -53,6 +53,18 @@ class MoveAction(Action):
     """ Agent attemps to move in a direction. """
     direction: Direction
 
+    @property
+    def delta(self) -> tuple[int, int]:
+        match self.direction:
+            case Direction.UP:         return ( 0,  1)
+            case Direction.DOWN:       return ( 0, -1)
+            case Direction.LEFT:       return (-1,  0)
+            case Direction.RIGHT:      return ( 1,  0)
+            case Direction.UP_LEFT:    return (-1,  1)
+            case Direction.UP_RIGHT:   return ( 1,  1)
+            case Direction.DOWN_LEFT:  return (-1, -1)
+            case Direction.DOWN_RIGHT: return ( 1, -1)
+
 
 @dataclass(frozen=True)
 class PickAction(Action):

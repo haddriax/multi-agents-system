@@ -3,14 +3,14 @@ from typing import Sequence
 from mesa import Model, DataCollector, Agent
 
 from src.system.config import Config
-from src.system.entities.agents.base_agent import BaseAgent
+from src.system.entities.agents.mesa_adapter import MesaAgentAdapter
 from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
 from src.system.models.action import (
     Action, ActionResult, ActionSuccess, ActionFailure, FailureReason,
     MoveAction, PickAction, DropAction, WaitAction, MergeAction,
 )
-from src.system.models.types import WasteType, RobotType, Direction
+from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
 from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
@@ -45,18 +45,18 @@ class SystemModel(Model):
                 ),
                 "Agents Carrying": lambda m: sum(
                     1 for a in m.agents
-                    if isinstance(a, BaseAgent) and len(a.memory.carried_wastes) > 0
+                    if isinstance(a, MesaAgentAdapter) and len(a.memory.carried_wastes) > 0
                 ),
                 "Grid Coverage (%)": lambda m: (
                     len(set().union(*(
                         a.memory.belief_map.keys()
-                        for a in m.agents if isinstance(a, BaseAgent)
+                        for a in m.agents if isinstance(a, MesaAgentAdapter)
                     ))) / (m.grid.width * m.grid.height) * 100
                 ),
             }
         )
 
-        for agent in filter(lambda a: isinstance(a, BaseAgent), self.agents):
+        for agent in filter(lambda a: isinstance(a, MesaAgentAdapter), self.agents):
             agent.force_percept_update()
 
     def get_zone(self, x: int) -> str:
@@ -67,7 +67,7 @@ class SystemModel(Model):
         self.datacollector.collect(self)
         self.agents.shuffle_do("step")
 
-    def perceive(self, agent: BaseAgent) -> Perception:
+    def perceive(self, agent: MesaAgentAdapter) -> Perception:
         """
         Create a perception for the agent based on its sensor readings.
         Returns a view of the world, conditioned by the sensor and centered on the agent.
@@ -99,7 +99,7 @@ class SystemModel(Model):
     def _build_cell_content(agents: list[Agent]) -> CellContent:
         """
         Build a CellContent object from the agents at a given position.
-        Using information from Radioactivity, Waste, and any BaseAgent objects.
+        Using information from Radioactivity, Waste, and any MesaAgentAdapter objects.
         """
         radioactivity_value = 0.0
         waste_type = WasteType.NONE
@@ -112,7 +112,7 @@ class SystemModel(Model):
             elif isinstance(agent, Waste):
                 waste_type = agent.type
                 waste_quantity = getattr(agent, 'quantity', 1)
-            elif isinstance(agent, BaseAgent):
+            elif isinstance(agent, MesaAgentAdapter):
                 robot_type = agent.robot_type
 
         return CellContent(
@@ -122,33 +122,25 @@ class SystemModel(Model):
             robot_type=robot_type,
         )
 
-    def do(self, agent: BaseAgent, action: Action) -> ActionResult:
+    def do(self, agent: MesaAgentAdapter, action: Action) -> ActionResult:
         """ Dispatch and execute an action for the given agent. """
         match action:
-            case MoveAction():  return self._do_move(agent, action.direction)
-            case PickAction():  return self._do_pick(agent)
-            case DropAction():  return self._do_drop(agent)
+            case MoveAction():  return self._do_move(agent, action)
+            case PickAction():  return self._do_pick(agent, action)
+            case DropAction():  return self._do_drop(agent, action)
             case WaitAction():  return ActionSuccess()
-            case MergeAction(): return self._do_merge(agent)
+            case MergeAction(): return self._do_merge(agent, action)
             case _:             return ActionFailure(FailureReason.NOT_IMPLEMENTED)
 
     # ------------------------------------------------------------------
     # Private action handlers
+    # Called when the Model dispatch action on Agent
     # ------------------------------------------------------------------
 
-    def _do_move(self, agent: BaseAgent, direction: Direction) -> ActionResult:
+    def _do_move(self, agent: MesaAgentAdapter, action: MoveAction) -> ActionResult:
         x, y = agent.pos
-
-        match direction:
-            case Direction.UP:         new_pos = (x,     y + 1)
-            case Direction.DOWN:       new_pos = (x,     y - 1)
-            case Direction.LEFT:       new_pos = (x - 1, y    )
-            case Direction.RIGHT:      new_pos = (x + 1, y    )
-            case Direction.UP_LEFT:    new_pos = (x - 1, y + 1)
-            case Direction.UP_RIGHT:   new_pos = (x + 1, y + 1)
-            case Direction.DOWN_LEFT:  new_pos = (x - 1, y - 1)
-            case Direction.DOWN_RIGHT: new_pos = (x + 1, y - 1)
-            case _: return ActionFailure(FailureReason.INVALID_DIRECTION)
+        dx, dy = action.delta
+        new_pos = (x + dx, y + dy)
 
         if self.grid.out_of_bounds(new_pos):
             return ActionFailure(FailureReason.OUT_OF_BOUNDS)
@@ -159,7 +151,7 @@ class SystemModel(Model):
         self.grid.move_agent(agent, new_pos)
         return ActionSuccess()
 
-    def _do_pick(self, agent: BaseAgent) -> ActionResult:
+    def _do_pick(self, agent: MesaAgentAdapter, action: PickAction) -> ActionResult:
         """ Pick up waste matching the agent's tier from the current cell. """
         cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
         waste_agents: list[Waste] = [a for a in cell_agents if isinstance(a, Waste)]
@@ -176,14 +168,14 @@ class SystemModel(Model):
         if waste_to_pick is None:
             return ActionFailure(FailureReason.WASTE_TYPE_MISMATCH)
 
-        if len(agent.memory.carried_wastes) >= agent.carry_capacity:
+        if agent.memory.carried_wastes:
             return ActionFailure(FailureReason.CARRY_CAPACITY_FULL)
 
         agent.memory.carried_wastes.append(waste_to_pick.type)
         self.grid.remove_agent(waste_to_pick)
         return ActionSuccess()
 
-    def _do_drop(self, agent: BaseAgent) -> ActionResult:
+    def _do_drop(self, agent: MesaAgentAdapter, action: DropAction) -> ActionResult:
         """ Dispose of carried waste at the current cell's disposal zone. """
         if not agent.memory.carried_wastes:
             return ActionFailure(FailureReason.NOT_CARRYING_WASTE)
@@ -195,7 +187,7 @@ class SystemModel(Model):
         agent.memory.carried_wastes.pop()
         return ActionSuccess()
 
-    def _do_merge(self, agent: BaseAgent) -> ActionResult:
+    def _do_merge(self, agent: MesaAgentAdapter, action: MergeAction) -> ActionResult:
         """
         Merge the carried waste with a same-tier waste on the current cell.
 

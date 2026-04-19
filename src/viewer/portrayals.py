@@ -2,7 +2,7 @@ from mesa import Agent
 from mesa.visualization.components import AgentPortrayalStyle
 
 from src.system.config import ViewerConfig
-from src.system.entities.agents.base_agent import BaseAgent
+from src.system.entities.agents.mesa_adapter import MesaAgentAdapter
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
 from src.system.entities.objects.waste_disposal_zone import WasteDisposalZone
@@ -43,7 +43,7 @@ def make_agent_portrayal(cell_size_pts: float, viewer_config: ViewerConfig | Non
         if isinstance(agent, Radioactivity):
             return _INVISIBLE
 
-        if isinstance(agent, BaseAgent):
+        if isinstance(agent, MesaAgentAdapter):
             color = robot_colors.get(agent.robot_type.name, "white")
             return AgentPortrayalStyle(color=color, size=robot_size, marker="o", zorder=3)
 
