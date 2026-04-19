@@ -6,3 +6,4 @@ from src.system.models.types import RobotType
 class GreenAgent(MesaAgentAdapter):
     robot_type = RobotType.GREEN
     HANDLERS = BASE_HANDLERS
+    MAX_ZONE = 1

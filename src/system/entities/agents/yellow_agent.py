@@ -6,3 +6,4 @@ from src.system.models.types import RobotType
 class YellowAgent(MesaAgentAdapter):
     robot_type = RobotType.YELLOW
     HANDLERS = BASE_HANDLERS
+    MAX_ZONE = 2

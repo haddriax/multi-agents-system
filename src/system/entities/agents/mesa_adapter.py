@@ -10,15 +10,22 @@ from src.system.models.types import RobotType
 
 
 class MesaAgentAdapter(Agent, ABC):
+    """ Adapter class for Mesa model and our Agent. """
     robot_type: RobotType = RobotType.NONE
     HANDLERS: list[Handler] = []
+    MAX_ZONE: int | None = None  # 1=z1, 2=z1+z2, None=unrestricted
 
     def __init__(self, model: Model) -> None:
         super().__init__(model)
+        grid_w = model.grid.width
+        max_zone = type(self).MAX_ZONE
+        # For now, zone are just 1/3 of the are each. Not very scalable though.
+        max_x = (grid_w // 3 * max_zone) - 1 if max_zone is not None else None
         self.robot = RobotAgent(
             tier=self._resolve_tier(),
-            grid_dims=(model.grid.width, model.grid.height),
+            grid_dims=(grid_w, model.grid.height),
             handlers=type(self).HANDLERS,
+            max_x=max_x,
         )
 
     def step(self) -> None:

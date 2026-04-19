@@ -16,13 +16,14 @@ class RobotAgent:
         tier: int,
         grid_dims: tuple[int, int],
         handlers: list[Handler],
+        max_x: int | None = None,
         sensors: dict[str, Sensor] | None = None,
     ) -> None:
         self.tier = tier
         self.grid_dims = grid_dims
         self.handlers = handlers
         self.sensors: dict[str, Sensor] = sensors or {"optical": OpticalSensor()}
-        self.memory: Memory = Memory(position=(0, 0))
+        self.memory: Memory = Memory(position=(0, 0), max_x=max_x)
 
     def update_memory(self, perception: Perception) -> None:
         """ Update the memory: what the bot perceives is now what it believes. """

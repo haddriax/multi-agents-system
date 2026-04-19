@@ -24,3 +24,6 @@ class Memory(BaseModel):
 
     target_cell: tuple[int, int] | None = None
     """ The target cell the bot is heading to. Used to detect if the waste disappeared. """
+
+    max_x: int | None = None
+    """ Maximum x-coordinate the bot is allowed to reach. None = unrestricted. """

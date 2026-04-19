@@ -56,11 +56,14 @@ def _handle_merge(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Acti
 
 
 def _find_closest_waste(memory: Memory, tier: int) -> tuple[int, int] | None:
-    """Return the nearest cell with tier-matching waste, or None."""
+    """Return the nearest cell with tier-matching waste within the allowed zone, or None."""
     best_pos = None
     best_dist = float("inf")
 
     for pos, cell in memory.belief_map.items():
+        # Ignore wastes that are outside the Agent action zones
+        if memory.max_x is not None and pos[0] > memory.max_x:
+            continue
         if cell.waste_type.value == tier:
             dist = abs(pos[0] - memory.position[0]) + abs(pos[1] - memory.position[1])
             if dist < best_dist:
@@ -121,6 +124,8 @@ def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
     best_pos: tuple[int, int] | None = None
     best_dist: float = float("inf")
 
+    zone_max_x = memory.max_x if memory.max_x is not None else grid_w - 1
+
     for (kx, ky) in known:
         for dx in range(-1, 2):
             for dy in range(-1, 2):
@@ -128,7 +133,7 @@ def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
                 if candidate in known:
                     continue
                 cx, cy = candidate
-                if cx < 0 or cx >= grid_w or cy < 0 or cy >= grid_h:
+                if cx < 0 or cx > zone_max_x or cy < 0 or cy >= grid_h:
                     continue
                 dist = abs(cx - memory.position[0]) + abs(cy - memory.position[1])
                 if dist < best_dist:
@@ -141,8 +146,16 @@ def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
     return MoveAction(random.choice(list(Direction)))
 
 
+# Default handler, suitable for Green and Yellow that have same behavior
 BASE_HANDLERS: list[Handler] = [
     _handle_merge,
+    _handle_seek,
+    _handle_explore,
+]
+
+# Red agent must kknow the disposal place and interact with it.
+# Also, they can't merge waste
+RED_HANDLERS: list[Handler] = [
     _handle_seek,
     _handle_explore,
 ]
