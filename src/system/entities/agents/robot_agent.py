@@ -32,7 +32,14 @@ class RobotAgent:
         self.memory.last_perception = perception
         self.memory.position = perception.perceiver_position
         for abs_pos, cell_content in perception.readings:
+            is_new = abs_pos not in self.memory.belief_map
             self.memory.belief_map[abs_pos] = cell_content
+            # Opportunistic discovery: announce newly seen own-tier waste that isn't our target
+            if (is_new
+                    and cell_content.waste_type.value == self.tier
+                    and cell_content.waste_type.value != 0
+                    and abs_pos != self.memory.target_cell):
+                self.memory.outbox.append((cell_content.waste_type, abs_pos))
         self._process_mailbox(perception)
 
     def _process_mailbox(self, perception: Perception) -> None:

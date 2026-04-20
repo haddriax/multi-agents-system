@@ -79,6 +79,29 @@ class SystemModel(Model):
         """ Execute one world step. Note: self.steps is managed by Mesa (_do_step wrapper). """
         self.datacollector.collect(self)
         self.agents.shuffle_do("step")
+        self._process_outboxes()
+
+    def _process_outboxes(self) -> None:
+        """Broadcast each agent's outbox entries to same-tier peers as WasteDiscoveredMessage."""
+        for agent in self.agents:
+            if not isinstance(agent, MesaAgentAdapter):
+                continue
+            for waste_type, pos in agent.memory.outbox:
+                # Skip if the waste is already gone (picked during the step)
+                cell_agents = self.grid.get_cell_list_contents([pos])
+                if not any(isinstance(a, Waste) and a.tier == agent.tier for a in cell_agents):
+                    continue
+                msg = WasteDiscoveredMessage(waste_type=waste_type, position=pos)
+                for a in self.agents:
+                    if (isinstance(a, MesaAgentAdapter)
+                            and a.unique_id != agent.unique_id
+                            and a.tier == agent.tier
+                            and not any(
+                                isinstance(m, WasteDiscoveredMessage) and m.position == pos
+                                for m in a.memory.mailbox
+                            )):
+                        a.memory.mailbox.append(msg)
+            agent.memory.outbox.clear()
 
     def perceive(self, agent: MesaAgentAdapter) -> Perception:
         """

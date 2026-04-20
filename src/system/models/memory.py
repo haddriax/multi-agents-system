@@ -29,3 +29,6 @@ class Memory(BaseModel):
 
     mailbox: list[Message] = Field(default_factory=list)
     """ Incoming messages from other bots. It's processed once per step in update_memory. """
+
+    outbox: list[tuple[WasteType, tuple[int, int]]] = Field(default_factory=list)
+    """ Waste discoveries to broadcast to same-tier peers at end of step. """
