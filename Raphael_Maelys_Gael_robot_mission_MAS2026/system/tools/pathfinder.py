@@ -44,7 +44,7 @@ class Pathfinder:
                 return True  # goal may have waste on it: always reachable
             cell = memory.belief_map.get(pos)
             if cell is None:
-                return True  # unseen cell: always assume passable!
+                return True  # unseen cell: always assume passable
             return cell.robot_type == RobotType.NONE
 
         open_set: list[tuple[float, tuple[int, int]]] = [(0.0, start)]
