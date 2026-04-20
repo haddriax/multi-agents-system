@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 19-04-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 from dataclasses import dataclass
 
 from src.system.models.types import WasteType

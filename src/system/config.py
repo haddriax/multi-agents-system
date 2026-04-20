@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 23-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 from dataclasses import dataclass, field
 import yaml
 

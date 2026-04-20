@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 20-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 """
     For action execution, we use a command pattern. It's a more scalable way to decouple the action definitions from their execution logic, which is in SystemModel.do().
     Since the Mesa model must execute the action, this design keep the boundary between Mesa executing and the Agent requesting an execution.

@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 20-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 from pydantic import BaseModel, Field
 from src.system.models.perception import Perception, CellContent
 from src.system.models.action import Action

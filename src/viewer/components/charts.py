@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 25-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 import solara
 from matplotlib.figure import Figure
 from mesa.visualization.utils import update_counter

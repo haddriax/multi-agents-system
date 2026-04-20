@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 20-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 from typing import Sequence
 
 from mesa import Model, DataCollector, Agent
@@ -97,9 +101,7 @@ class SystemModel(Model):
         self._check_victory()
 
     def _check_victory(self) -> None:
-        """Detect the terminal state: no waste on grid and no bot carrying.
-
-        Idempotent — once `victory` is set, subsequent calls are no-ops.
+        """Detect the victory state: no waste on grid and no bot carrying.
         Sets Mesa's `self.running = False` so SolaraViz stops calling step().
         """
         if self.victory:

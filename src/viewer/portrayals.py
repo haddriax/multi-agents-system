@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 24-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 from mesa import Agent
 from mesa.visualization.components import AgentPortrayalStyle
 

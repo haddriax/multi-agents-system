@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 23-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 import random
 from dataclasses import dataclass
 from typing import Type

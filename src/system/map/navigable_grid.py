@@ -1,3 +1,7 @@
+# Group: 9
+# Date: 20-03-2026
+# Members: Maëlys Hanoire, Raphaël Vignal, Gaël Garnier
+
 from mesa.space import MultiGrid
 from src.system.entities.agents.mesa_adapter import MesaAgentAdapter
 
