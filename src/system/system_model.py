@@ -10,7 +10,7 @@ from src.system.models.action import (
     Action, ActionResult, ActionSuccess, ActionFailure, FailureReason,
     MoveAction, PickAction, DropAction, WaitAction, MergeAction, HandoffAction,
 )
-from src.system.models.message import Message
+from src.system.models.message import WasteDiscoveredMessage, WasteCancelledMessage
 from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
@@ -191,6 +191,14 @@ class SystemModel(Model):
 
         agent.memory.carried_wastes.append(waste_to_pick.type)
         self.grid.remove_agent(waste_to_pick)
+
+        # Notify same-tier peers that the waste at this position is gone
+        cancel = WasteCancelledMessage(position=agent.pos)
+        for a in self.agents:
+            if (isinstance(a, MesaAgentAdapter)
+                    and a.unique_id != agent.unique_id
+                    and a.tier == agent.tier):
+                a.memory.mailbox.append(cancel)
         return ActionSuccess()
 
     def _do_drop(self, agent: MesaAgentAdapter, action: DropAction) -> ActionResult:
@@ -257,10 +265,13 @@ class SystemModel(Model):
         return ActionSuccess()
 
     def _notify_tier(self, waste_type: WasteType, pos: tuple[int, int]) -> None:
-        """Deliver a Message to all agents whose tier matches the deposited waste type."""
-        msg = Message(waste_type=waste_type, position=pos)
+        """Deliver a WasteDiscoveredMessage to all agents whose tier matches the deposited waste type."""
+        msg = WasteDiscoveredMessage(waste_type=waste_type, position=pos)
         for a in self.agents:
             if isinstance(a, MesaAgentAdapter) and a.tier == waste_type.value:
-                if not any(m.position == pos for m in a.memory.mailbox):
+                if not any(
+                    isinstance(m, WasteDiscoveredMessage) and m.position == pos
+                    for m in a.memory.mailbox
+                ):
                     a.memory.mailbox.append(msg)
 
