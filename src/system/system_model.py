@@ -344,9 +344,6 @@ class SystemModel(Model):
         msg = WasteDiscoveredMessage(waste_type=waste_type, position=pos)
         for a in self.agents:
             if isinstance(a, MesaAgentAdapter) and a.tier == waste_type.value:
-                if not any(
-                    isinstance(m, WasteDiscoveredMessage) and m.position == pos
-                    for m in a.memory.mailbox
-                ):
+                if not any(m.position == pos for m in a.memory.mailbox):
                     a.memory.mailbox.append(msg)
 

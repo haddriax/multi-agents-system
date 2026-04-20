@@ -4,7 +4,7 @@ class Sensor:
     For now, we only have an optical sensor, but we could add more like radiation sensor,
     so this class force the design to work with n named sensors.
     """
-    def __init__(self, radius: int = 5) -> None:
+    def __init__(self, radius: int = 6) -> None:
         self.radius = radius
 
 
