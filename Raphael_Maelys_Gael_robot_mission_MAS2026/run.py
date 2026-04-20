@@ -38,8 +38,13 @@ if __name__ == '__main__':
     import sys
 
     _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _APP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "viewer", "app.py")
+    _APP_PATH = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "viewer",
+        "app.py"
+    )
 
+    # Sans le subprocess, Solora ne maintient pas le serveur ouvert, d'où ce "hack"
     subprocess.run(
         [sys.executable, "-m", "solara", "run", _APP_PATH] + sys.argv[1:],
         cwd=_PROJECT_ROOT,
