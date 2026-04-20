@@ -8,9 +8,9 @@ spawning:
   n_green: 5
   n_yellow: 5
   n_red: 5
-  n_waste_green: 8
-  n_waste_yellow: 4
-  n_waste_red: 2
+  n_waste_green: 20
+  n_waste_yellow: 8
+  n_waste_red: 6
 
 # Change everything about the viewer (Solara) here.
 viewer:
