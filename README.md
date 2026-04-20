@@ -42,7 +42,7 @@ Cette séparation casse le couplage Agent/Model de Mesa, ce qui a été un long 
 
 À chaque step, `MesaAgentAdapter.step()` exécute le cycle suivant :
 
-1. **Percevoir** : `SystemModel.perceive(agent)` construit une `Perception` à partir du capteur optique de l'agent (rayon 5).
+1. **Percevoir** : `SystemModel.perceive(agent)` construit une `Perception` à partir des capteurs de l'agent.
 2. **Mettre à jour la mémoire** — `robot.update_memory(perception)` écrit les lectures de cellules dans `Memory.belief_map`, puis vide la boîte mail.
 3. **Délibérer** : `robot.deliberate()` parcourt la chaîne de handlers et retourne la première `Action` non nulle.
 4. **Agir** : `SystemModel.do(agent, action)` exécute l'action et retourne un `ActionResult`.
