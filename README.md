@@ -1,8 +1,7 @@
 # Robot Mission MAS 2026
 
-Dépôt de projet Multi-Agent Systems ! Ce projet a été développé dans le cadre du cours MAS 2026. Ce README sert de rapport où nous expliquons le problème que nous cherchons à résoudre, l'approche adoptée (choix de conception et algorithmes) ainsi que les résultats obtenus.
-
-Ce projet a été développé par le **Groupe 9** : Maëlys Hanoire, Raphaël Vignal & Gaël Garnier.
+Dépôt de projet Multi-Agent Systems.  
+Ce projet a été développé dans le cadre du cours MAS 2026, développé par le **Groupe 9** : Maëlys Hanoire, Raphaël Vignal & Gaël Garnier.
 
 ---
 
