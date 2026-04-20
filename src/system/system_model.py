@@ -33,8 +33,19 @@ class SystemModel(Model):
         spawner = Spawner(self, config)
         spawner.execute_spawning()
 
-        # Reservation registry: pos → (is_priority, agent_unique_id)
+        # Reservation registry: location to (is_priority, agent_unique_id)
         self._reservations: dict[tuple[int, int], tuple[bool, int]] = {}
+
+        # Keep how much spawned at launch, so we can check the victory later.
+        self._initial_waste_counts: dict[WasteType, int] = {
+            WasteType.GREEN:  sum(1 for a in self.agents if isinstance(a, Waste) and a.type == WasteType.GREEN),
+            WasteType.YELLOW: sum(1 for a in self.agents if isinstance(a, Waste) and a.type == WasteType.YELLOW),
+            WasteType.RED:    sum(1 for a in self.agents if isinstance(a, Waste) and a.type == WasteType.RED),
+        }
+
+        # Victory state, set when all wastes are disposed
+        self.victory: bool = False
+        self.victory_step: int | None = None
 
         self.datacollector = DataCollector(
             model_reporters={
@@ -83,6 +94,44 @@ class SystemModel(Model):
         self.datacollector.collect(self)
         self.agents.shuffle_do("step")
         self._process_outboxes()
+        self._check_victory()
+
+    def _check_victory(self) -> None:
+        """Detect the terminal state: no waste on grid and no bot carrying.
+
+        Idempotent — once `victory` is set, subsequent calls are no-ops.
+        Sets Mesa's `self.running = False` so SolaraViz stops calling step().
+        """
+        if self.victory:
+            return
+        waste_on_grid = any(
+            isinstance(a, Waste) and a.pos is not None for a in self.agents
+        )
+        if waste_on_grid:
+            return
+        carrying = any(
+            isinstance(a, MesaAgentAdapter) and a.memory.carried_wastes
+            for a in self.agents
+        )
+        if carrying:
+            return
+        self.victory = True
+        self.victory_step = self.steps
+        self.running = False
+
+        zone = next((a for a in self.agents if isinstance(a, WasteDisposalZone)), None)
+        total = zone.waste_received if zone is not None else 0
+
+        g = self._initial_waste_counts[WasteType.GREEN]
+        y = self._initial_waste_counts[WasteType.YELLOW]
+        r = self._initial_waste_counts[WasteType.RED]
+
+        # Check that we have disposed the expect amount of waste (not lost or carried by bot)
+        expected: int = r + (y + g // 2) // 2
+        status = "OK" if total == expected else f"MISMATCH (expected {expected})"
+        print(f"[Victory] All waste cleared at step {self.victory_step}")
+        print(f"  Initial: G={g} Y={y} R={r}")
+        print(f"  Disposed: {total} [{status}]")
 
     def _process_outboxes(self) -> None:
         """Broadcast each agent's outbox entries to same-tier peers as WasteDiscoveredMessage."""
