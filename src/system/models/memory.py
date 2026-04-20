@@ -24,8 +24,14 @@ class Memory(BaseModel):
     target_cell: tuple[int, int] | None = None
     """ The target cell the bot is heading to. Used to detect if the waste disappeared. """
 
+    active_reservation: tuple[int, int] | None = None
+    """ Position reserved after a successful ReserveAction"""
+
     max_x: int | None = None
     """ Maximum x-coordinate the bot is allowed to reach. None = everywhere. """
 
     mailbox: list[Message] = Field(default_factory=list)
     """ Incoming messages from other bots. It's processed once per step in update_memory. """
+
+    outbox: list[tuple[WasteType, tuple[int, int]]] = Field(default_factory=list)
+    """ Waste discoveries to broadcast to same-tier robots at end of step. """

@@ -8,9 +8,9 @@ from src.system.map.navigable_grid import NavigableGrid
 from src.system.models.perception import Perception, CellContent
 from src.system.models.action import (
     Action, ActionResult, ActionSuccess, ActionFailure, FailureReason,
-    MoveAction, PickAction, DropAction, WaitAction, MergeAction, HandoffAction,
+    MoveAction, PickAction, DropAction, WaitAction, MergeAction, HandoffAction, ReserveAction,
 )
-from src.system.models.message import Message
+from src.system.models.message import WasteDiscoveredMessage, WasteCancelledMessage
 from src.system.models.types import WasteType, RobotType
 from src.system.entities.objects.radioactivity import Radioactivity
 from src.system.entities.objects.waste import Waste
@@ -32,6 +32,9 @@ class SystemModel(Model):
         from src.system.tools.spawner import Spawner
         spawner = Spawner(self, config)
         spawner.execute_spawning()
+
+        # Reservation registry: pos → (is_priority, agent_unique_id)
+        self._reservations: dict[tuple[int, int], tuple[bool, int]] = {}
 
         self.datacollector = DataCollector(
             model_reporters={
@@ -79,6 +82,29 @@ class SystemModel(Model):
         """ Execute one world step. Note: self.steps is managed by Mesa (_do_step wrapper). """
         self.datacollector.collect(self)
         self.agents.shuffle_do("step")
+        self._process_outboxes()
+
+    def _process_outboxes(self) -> None:
+        """Broadcast each agent's outbox entries to same-tier peers as WasteDiscoveredMessage."""
+        for agent in self.agents:
+            if not isinstance(agent, MesaAgentAdapter):
+                continue
+            for waste_type, pos in agent.memory.outbox:
+                # Skip if the waste is already gone (picked during the step)
+                cell_agents = self.grid.get_cell_list_contents([pos])
+                if not any(isinstance(a, Waste) and a.tier == agent.tier for a in cell_agents):
+                    continue
+                msg = WasteDiscoveredMessage(waste_type=waste_type, position=pos)
+                for a in self.agents:
+                    if (isinstance(a, MesaAgentAdapter)
+                            and a.unique_id != agent.unique_id
+                            and a.tier == agent.tier
+                            and not any(
+                                isinstance(m, WasteDiscoveredMessage) and m.position == pos
+                                for m in a.memory.mailbox
+                            )):
+                        a.memory.mailbox.append(msg)
+            agent.memory.outbox.clear()
 
     def perceive(self, agent: MesaAgentAdapter) -> Perception:
         """
@@ -101,11 +127,18 @@ class SystemModel(Model):
             cell_content = self._build_cell_content(cell_agents)
             readings.append((pos, cell_content))
 
+        perceived_positions = {pos for pos, _ in readings}
+        foreign_reservations = frozenset(
+            pos for pos, (_, holder_id) in self._reservations.items()
+            if holder_id != agent.unique_id and pos in perceived_positions
+        )
+
         return Perception(
             perceiver_position=agent.pos,
             readings=tuple(readings),
             step=self.steps,
-            perceiver_id=agent.unique_id
+            perceiver_id=agent.unique_id,
+            foreign_reservations=foreign_reservations,
         )
 
     @staticmethod
@@ -148,6 +181,7 @@ class SystemModel(Model):
             case WaitAction():    return ActionSuccess()
             case MergeAction():   return self._do_merge(agent, action)
             case HandoffAction(): return self._do_handoff(agent, action)
+            case ReserveAction(): return self._do_reserve(agent, action)
             case _:               return ActionFailure(FailureReason.NOT_IMPLEMENTED)
 
     # ------------------------------------------------------------------
@@ -171,6 +205,10 @@ class SystemModel(Model):
 
     def _do_pick(self, agent: MesaAgentAdapter, action: PickAction) -> ActionResult:
         """ Pick up waste matching the agent's tier from the current cell. """
+        entry = self._reservations.get(agent.pos)
+        if entry is not None and entry[1] != agent.unique_id:
+            return ActionFailure(FailureReason.RESERVATION_CONFLICT)
+
         cell_agents: list[Agent] = self.grid.get_cell_list_contents([agent.pos])
         waste_agents: list[Waste] = [a for a in cell_agents if isinstance(a, Waste)]
 
@@ -191,6 +229,40 @@ class SystemModel(Model):
 
         agent.memory.carried_wastes.append(waste_to_pick.type)
         self.grid.remove_agent(waste_to_pick)
+        self._reservations.pop(agent.pos, None)
+        self._broadcast_cancel(agent, agent.pos)
+        return ActionSuccess()
+
+    def _do_reserve(self, agent: MesaAgentAdapter, action: ReserveAction) -> ActionResult:
+        """
+        Claim a waste cell. Priority requests (bot already carries a waste of its own level) can override other reservation.
+
+        A bot can only hold one reservation at a time and any previous reservation by the same bot is deleted.
+        """
+        pos = action.position
+        entry = self._reservations.get(pos)
+        if entry is not None:
+            existing_priority, holder_id = entry
+            if holder_id == agent.unique_id:
+                return ActionSuccess()
+            cell_agents = self.grid.get_cell_list_contents([pos])
+            waste_exists = any(
+                isinstance(a, Waste) and a.tier == agent.tier for a in cell_agents
+            )
+            stale = not waste_exists
+            override = action.priority and not existing_priority
+            if not (stale or override):
+                return ActionFailure(FailureReason.RESERVATION_CONFLICT)
+
+        # Release any previous reservation this agent was holding elsewhere
+        previous = [
+            p for p, (_, uid) in self._reservations.items()
+            if uid == agent.unique_id and p != pos
+        ]
+        for p in previous:
+            self._reservations.pop(p)
+
+        self._reservations[pos] = (action.priority, agent.unique_id)
         return ActionSuccess()
 
     def _do_drop(self, agent: MesaAgentAdapter, action: DropAction) -> ActionResult:
@@ -243,6 +315,8 @@ class SystemModel(Model):
         # Consume the cell waste and upgrade the carried waste to the merged type
         self.grid.remove_agent(waste_on_cell[0])
         agent.memory.carried_wastes[0] = merged_type
+        self._reservations.pop(agent.pos, None)
+        self._broadcast_cancel(agent, agent.pos)
         return ActionSuccess()
 
     def _do_handoff(self, agent: MesaAgentAdapter, action: HandoffAction) -> ActionResult:
@@ -256,11 +330,23 @@ class SystemModel(Model):
         self._notify_tier(waste_type, agent.pos)
         return ActionSuccess()
 
+    def _broadcast_cancel(self, source: MesaAgentAdapter, pos: tuple[int, int]) -> None:
+        """Notify same-tier boys that the waste is gone."""
+        msg = WasteCancelledMessage(position=pos)
+        for a in self.agents:
+            if (isinstance(a, MesaAgentAdapter)
+                    and a.unique_id != source.unique_id
+                    and a.tier == source.tier):
+                a.memory.mailbox.append(msg)
+
     def _notify_tier(self, waste_type: WasteType, pos: tuple[int, int]) -> None:
-        """Deliver a Message to all agents whose tier matches the deposited waste type."""
-        msg = Message(waste_type=waste_type, position=pos)
+        """Deliver a WasteDiscoveredMessage to all agents with the same tier as the deposited waste type."""
+        msg = WasteDiscoveredMessage(waste_type=waste_type, position=pos)
         for a in self.agents:
             if isinstance(a, MesaAgentAdapter) and a.tier == waste_type.value:
-                if not any(m.position == pos for m in a.memory.mailbox):
+                if not any(
+                    isinstance(m, WasteDiscoveredMessage) and m.position == pos
+                    for m in a.memory.mailbox
+                ):
                     a.memory.mailbox.append(msg)
 

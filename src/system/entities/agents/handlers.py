@@ -8,10 +8,11 @@ from src.system.models.action import (
     MergeAction,
     MoveAction,
     PickAction,
+    ReserveAction,
     WaitAction,
 )
 from src.system.models.memory import Memory
-from src.system.models.types import Direction, RobotType
+from src.system.models.types import Direction, RobotType, WasteType
 from src.system.tools.pathfinder import Pathfinder
 
 
@@ -36,6 +37,81 @@ def _move_towards(origin: tuple[int, int], target: tuple[int, int]) -> Action:
         case (0, 1):   return MoveAction(Direction.UP)
         case (0, -1):  return MoveAction(Direction.DOWN)
         case _:        return WaitAction()
+
+
+def _navigate(
+    memory: Memory,
+    target: tuple[int, int],
+    grid_dims: tuple[int, int],
+) -> Action | None:
+    """
+    Produce the next move toward the bot's target, replanning on blockage.
+
+    Returns:
+      MoveAction: when a valid next step exists
+      WaitAction: when the bot is stuck
+      None: when bot arrives at position
+    """
+    if memory.position == target:
+        return None
+
+    grid_w, grid_h = grid_dims
+
+    if memory.target_cell != target or not memory.planned_path:
+        memory.target_cell = target
+        memory.planned_path = Pathfinder.a_star_find_path_to(
+            memory.position, target, memory, grid_w, grid_h,
+        )
+
+    if not memory.planned_path:
+        return WaitAction()
+
+    next_pos = memory.planned_path[0]
+    cell = memory.belief_map.get(next_pos)
+    if cell is not None and cell.robot_type != RobotType.NONE:
+        # Planned step is now blocked — recompute with the blocker in map.
+        memory.planned_path = Pathfinder.a_star_find_path_to(
+            memory.position, target, memory, grid_w, grid_h,
+        )
+        if not memory.planned_path:
+            return WaitAction()
+        next_pos = memory.planned_path[0]
+        cell = memory.belief_map.get(next_pos)
+        if cell is not None and cell.robot_type != RobotType.NONE:
+            return WaitAction()
+
+    return _move_towards(memory.position, next_pos)
+
+
+def _handle_yield(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Action | None:
+    """
+    Step off a cell reserved by another bot. Implemented to solve the deadlock created by the reservation.
+    """
+    perception = memory.last_perception
+    if perception is None:
+        return None
+    foreign = perception.foreign_reservations
+    if memory.position not in foreign:
+        return None
+
+    grid_w, grid_h = grid_dims
+    zone_max_x = memory.max_x if memory.max_x is not None else grid_w - 1
+    x, y = memory.position
+
+    for direction in Direction:
+        action = MoveAction(direction=direction)
+        dx, dy = action.delta
+        nx, ny = x + dx, y + dy
+        if nx < 0 or nx > zone_max_x or ny < 0 or ny >= grid_h:
+            continue
+        if (nx, ny) in foreign:
+            continue
+        cell = memory.belief_map.get((nx, ny))
+        if cell is not None and cell.robot_type != RobotType.NONE:
+            continue
+        return action
+
+    return WaitAction()
 
 
 def _handle_merge(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Action | None:
@@ -76,46 +152,43 @@ def _find_closest_waste(memory: Memory, tier: int) -> tuple[int, int] | None:
 
 
 def _handle_seek(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Action | None:
-    """Navigate toward the nearest tier-matching waste. Returns None if none is known."""
-    grid_w, grid_h = grid_dims
-
-    # 1. Validate current goal
-    if memory.target_cell is not None:
-        cell = memory.belief_map.get(memory.target_cell)
+    """
+    Reserve-then-navigate toward tier-matching waste.
+    """
+    # 1. Validate active reservation against belief_map
+    if memory.active_reservation is not None:
+        cell = memory.belief_map.get(memory.active_reservation)
         if cell is None or cell.waste_type.value != tier:
+            memory.active_reservation = None
             memory.target_cell = None
             memory.planned_path = []
 
-    # 2. Find new goal and compute path
-    if memory.target_cell is None:
-        goal = _find_closest_waste(memory, tier)
-        if goal is not None:
-            memory.target_cell = goal
-            memory.planned_path = Pathfinder.a_star_find_path_to(
-                memory.position, goal, memory, grid_w, grid_h,
-            )
+    # 2. Navigate toward reserved position
+    if memory.active_reservation is not None:
+        target = memory.active_reservation
+        move = _navigate(memory, target, grid_dims)
+        if move is not None:
+            return move
 
-    # No tier-matching waste known, defer to exploration
-    if memory.target_cell is None:
-        return None
-
-    # 3. Follow path
-    if memory.planned_path:
-        next_pos = memory.planned_path[0]
-        cell = memory.belief_map.get(next_pos)
-        if cell is not None and cell.robot_type != RobotType.NONE:
-            return WaitAction()  # blocked by a bot, retry next turn
-        return _move_towards(memory.position, next_pos)
-
-    # 4. Standing on goal cell
-    if memory.position == memory.target_cell:
+        # Arrived at target
         if memory.carried_wastes:
+            # Already picked, so we remove the goal
+            memory.active_reservation = None
             memory.target_cell = None
             memory.planned_path = []
             return None
+        memory.active_reservation = None
         return PickAction()
 
-    return None
+    # 3. No reservation then find nearest waste and send ReserveAction
+    goal = _find_closest_waste(memory, tier)
+    if goal is None:
+        return None
+    can_merge = (
+        len(memory.carried_wastes) == 1
+        and memory.carried_wastes[0].value == tier
+    )
+    return ReserveAction(waste_type=WasteType(tier), position=goal, priority=can_merge)
 
 
 def _handle_deposit(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Action | None:
@@ -124,7 +197,6 @@ def _handle_deposit(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
         return None
 
     carried = memory.carried_wastes[0]
-    grid_w, grid_h = grid_dims
 
     if memory.max_x is not None:
         # Green / Yellow: only deposit merged (higher-tier) waste
@@ -145,25 +217,14 @@ def _handle_deposit(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
         target = disposal_pos
         final_action = DropAction()
 
-    if memory.target_cell != target:
-        memory.target_cell = target
-        memory.planned_path = Pathfinder.a_star_find_path_to(
-            memory.position, target, memory, grid_w, grid_h,
-        )
+    move = _navigate(memory, target, grid_dims)
+    if move is not None:
+        return move
 
-    if memory.planned_path:
-        next_pos = memory.planned_path[0]
-        cell = memory.belief_map.get(next_pos)
-        if cell is not None and cell.robot_type != RobotType.NONE:
-            return WaitAction()
-        return _move_towards(memory.position, next_pos)
-
-    if memory.position == target:
-        memory.target_cell = None
-        memory.planned_path = []
-        return final_action
-
-    return None
+    # Arrived at target
+    memory.target_cell = None
+    memory.planned_path = []
+    return final_action
 
 
 def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Action:
@@ -198,6 +259,7 @@ def _handle_explore(memory: Memory, tier: int, grid_dims: tuple[int, int]) -> Ac
 
 # Default handler, suitable for Green and Yellow that have same behavior
 BASE_HANDLERS: list[Handler] = [
+    _handle_yield,
     _handle_merge,
     _handle_deposit,
     _handle_seek,
@@ -207,6 +269,7 @@ BASE_HANDLERS: list[Handler] = [
 # Red agent must kknow the disposal place and interact with it.
 # Also, they can't merge waste
 RED_HANDLERS: list[Handler] = [
+    _handle_yield,
     _handle_deposit,
     _handle_seek,
     _handle_explore,

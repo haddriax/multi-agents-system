@@ -13,7 +13,7 @@ from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
 
-from src.system.models.types import Direction
+from src.system.models.types import Direction, WasteType
 
 
 class FailureReason(Enum):
@@ -28,6 +28,7 @@ class FailureReason(Enum):
     NOT_IMPLEMENTED      = "not_implemented"       # action type exists but is not yet implemented
     INVALID_DIRECTION    = "invalid_direction"     # direction value is not a known Direction member
     ALREADY_MERGED       = "already_merged"        # carried waste is above agent tier, cannot merge further
+    RESERVATION_CONFLICT = "reservation_conflict"  # another bot already holds the reservation for this cell
 
 class ActionResult(ABC):
     pass
@@ -114,3 +115,19 @@ class HandoffAction(Action):
     Used by Green and Yellow at their zone boundary.
     """
     pass
+
+
+@dataclass(frozen=True)
+class ReserveAction(Action):
+    """
+    Claim a waste cell before navigating to it.
+
+    Fails with RESERVATION_CONFLICT if another bot already holds a reservation
+    for this position!
+
+    priority=True is for bots already carrying a waste and looking for one to merge it with.
+    It overrides a non-priority reservation.
+    """
+    waste_type: WasteType
+    position: tuple[int, int]
+    priority: bool = False

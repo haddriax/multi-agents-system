@@ -54,3 +54,9 @@ class Perception:
     """
 
     perceiver_id: int = Field(ge=0)
+
+    foreign_reservations: frozenset[tuple[int, int]] = Field(default_factory=frozenset)
+    """
+    Positions within perception range that are currently reserved by other bots.
+    It's a blacklist.
+    """
